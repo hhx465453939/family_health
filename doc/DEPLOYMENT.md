@@ -120,6 +120,17 @@ Invoke-RestMethod -Method POST ("http://localhost:8000/api/v1/knowledge-bases/" 
 | 前端 | 依赖变更时 `npm install`；每次变更后 `npm run lint`，可选 `npm run build` |
 | 通用 | 若项目内已配置 pre-commit / CI 脚本，优先执行项目既有脚本 |
 
+### 3.1 联调验收脚本（阶段 6）
+
+- 脚本: `scripts/acceptance_integration.ps1`
+- 覆盖链路: 登录 -> 配置 -> 对话 -> MCP -> KB -> 检索 -> 导出下载
+
+执行示例:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_integration.ps1 -SkipFrontendCheck
+```
+
 ---
 
 ## 4. 打包 .exe（规划）
