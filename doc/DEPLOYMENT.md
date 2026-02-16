@@ -86,6 +86,26 @@ Invoke-RestMethod -Method POST http://localhost:8000/api/v1/desensitization/rule
   -Headers $headers `
   -ContentType "application/json" `
   -Body '{"member_scope":"global","rule_type":"literal","pattern":"13800138000","replacement_token":"[PHONE]","enabled":true}'
+
+# 3) 创建 MCP server 并绑定到 qa agent
+$mcp = Invoke-RestMethod -Method POST http://localhost:8000/api/v1/mcp/servers `
+  -Headers $headers `
+  -ContentType "application/json" `
+  -Body '{"name":"tool-a","endpoint":"mock://tool-a","auth_type":"none","enabled":true,"timeout_ms":8000}'
+Invoke-RestMethod -Method PUT http://localhost:8000/api/v1/mcp/bindings/qa `
+  -Headers $headers `
+  -ContentType "application/json" `
+  -Body ("{`"mcp_server_ids`":[`"" + $mcp.data.id + "`"]}")
+
+# 4) 创建 KB 并构建最小文档
+$kb = Invoke-RestMethod -Method POST http://localhost:8000/api/v1/knowledge-bases `
+  -Headers $headers `
+  -ContentType "application/json" `
+  -Body '{"name":"family-kb","chunk_size":400,"chunk_overlap":50}'
+Invoke-RestMethod -Method POST ("http://localhost:8000/api/v1/knowledge-bases/" + $kb.data.id + "/build") `
+  -Headers $headers `
+  -ContentType "application/json" `
+  -Body '{"documents":[{"title":"doc1","content":"高血压用药指南"}]}'
 ```
 
 ---

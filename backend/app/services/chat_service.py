@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -25,17 +26,44 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _dump_mcp_ids(ids: list[str]) -> str:
+    return json.dumps(ids, ensure_ascii=False)
+
+
+def _load_mcp_ids(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    return [item for item in data if isinstance(item, str)]
+
+
+def session_to_dict(row: ChatSession) -> dict:
+    return {
+        "id": row.id,
+        "title": row.title,
+        "archived": row.archived,
+        "runtime_profile_id": row.runtime_profile_id,
+        "default_enabled_mcp_ids": _load_mcp_ids(row.default_enabled_mcp_ids_json),
+        "updated_at": row.updated_at.isoformat(),
+    }
+
+
 def create_session(
     db: Session,
     user_id: str,
     title: str,
     runtime_profile_id: str | None,
+    default_enabled_mcp_ids: list[str],
 ) -> ChatSession:
     row = ChatSession(
         id=str(uuid4()),
         user_id=user_id,
         title=title,
         runtime_profile_id=runtime_profile_id,
+        default_enabled_mcp_ids_json=_dump_mcp_ids(default_enabled_mcp_ids),
     )
     db.add(row)
     db.commit()
@@ -84,6 +112,10 @@ def _session_for_user(db: Session, session_id: str, user_id: str) -> ChatSession
     return row
 
 
+def get_session_for_user(db: Session, session_id: str, user_id: str) -> ChatSession:
+    return _session_for_user(db, session_id, user_id)
+
+
 def update_session(
     db: Session,
     session_id: str,
@@ -91,6 +123,7 @@ def update_session(
     title: str | None,
     runtime_profile_id: str | None,
     archived: bool | None,
+    default_enabled_mcp_ids: list[str] | None,
 ) -> ChatSession:
     row = _session_for_user(db, session_id, user_id)
     if title is not None:
@@ -99,6 +132,8 @@ def update_session(
         row.runtime_profile_id = runtime_profile_id
     if archived is not None:
         row.archived = archived
+    if default_enabled_mcp_ids is not None:
+        row.default_enabled_mcp_ids_json = _dump_mcp_ids(default_enabled_mcp_ids)
     row.updated_at = _now()
     db.commit()
     db.refresh(row)
@@ -217,3 +252,8 @@ def get_attachment_texts(
             raise ChatError(4004, "Attachment sanitized text missing")
         texts.append(path.read_text(encoding="utf-8"))
     return texts
+
+
+def get_session_default_mcp_ids(db: Session, session_id: str, user_id: str) -> list[str]:
+    session = _session_for_user(db, session_id, user_id)
+    return _load_mcp_ids(session.default_enabled_mcp_ids_json)

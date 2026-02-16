@@ -13,6 +13,7 @@ class ChatSession(Base):
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
     title: Mapped[str] = mapped_column(String(120), nullable=False, default="新对话")
     runtime_profile_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    default_enabled_mcp_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)

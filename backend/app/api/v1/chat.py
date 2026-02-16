@@ -20,6 +20,7 @@ from app.services.chat_service import (
     delete_session,
     list_messages,
     list_sessions,
+    session_to_dict,
     update_session,
 )
 from app.services.desensitization_service import DesensitizationError, create_rule
@@ -40,8 +41,9 @@ def create_session_api(
         user_id=user.id,
         title=payload.title,
         runtime_profile_id=payload.runtime_profile_id,
+        default_enabled_mcp_ids=payload.default_enabled_mcp_ids,
     )
-    return ok({"id": row.id, "title": row.title, "archived": row.archived}, trace_id)
+    return ok(session_to_dict(row), trace_id)
 
 
 @router.get("/chat/sessions")
@@ -65,22 +67,7 @@ def list_session_api(
         page=safe_page,
         page_size=safe_page_size,
     )
-    return ok(
-        {
-            "total": total,
-            "items": [
-                {
-                    "id": row.id,
-                    "title": row.title,
-                    "archived": row.archived,
-                    "runtime_profile_id": row.runtime_profile_id,
-                    "updated_at": row.updated_at.isoformat(),
-                }
-                for row in items
-            ],
-        },
-        trace_id,
-    )
+    return ok({"total": total, "items": [session_to_dict(row) for row in items]}, trace_id)
 
 
 @router.patch("/chat/sessions/{session_id}")
@@ -100,10 +87,11 @@ def update_session_api(
             title=payload.title,
             runtime_profile_id=payload.runtime_profile_id,
             archived=payload.archived,
+            default_enabled_mcp_ids=payload.default_enabled_mcp_ids,
         )
     except ChatError as exc:
         return error(exc.code, exc.message, trace_id, status_code=404)
-    return ok({"id": row.id, "title": row.title, "archived": row.archived}, trace_id)
+    return ok(session_to_dict(row), trace_id)
 
 
 @router.delete("/chat/sessions/{session_id}")

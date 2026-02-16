@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     raw_vault_dir: str = "raw_vault"
     sanitized_workspace_dir: str = "sanitized_workspace"
     chat_context_message_limit: int = 12
+    mcp_max_parallel_tools: int = 3
+    mcp_tool_timeout_ms: int = 8000
+    mcp_total_budget_ms: int = 15000
 
     model_config = SettingsConfigDict(env_prefix="FH_", env_file=".env", extra="ignore")
 

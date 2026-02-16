@@ -78,6 +78,52 @@
   - 更新 `doc/api/README.md` 模块实现状态
   - 更新 `doc/DEPLOYMENT.md` 阶段 1/2 验证示例
 
+### [2026-02-16 15:35] 阶段 3 首版落地（MCP 配置与会话/本轮覆盖）
+- 问题描述: 需要补齐 PRD 阶段 3 的 MCP 全局配置、选择性调用与降级策略。
+- 根因定位: 缺失 mcp server/binding 数据模型、API 和 agent 侧路由逻辑。
+- 解决方案: 新增 MCP 模块并接入 agent QA 执行链路，支持会话默认与本轮覆盖。
+- 代码变更（文件/函数）:
+  - `backend/app/models/mcp_server.py`, `backend/app/models/agent_mcp_binding.py`: MCP 数据模型
+  - `backend/app/api/v1/mcp.py`: MCP server CRUD、ping、agent binding API
+  - `backend/app/services/mcp_service.py`: server 管理、有效 MCP 解析、并发调用与降级
+  - `backend/app/models/chat_session.py`: 新增 `default_enabled_mcp_ids_json`
+  - `backend/app/services/chat_service.py`: 会话默认 MCP 配置持久化与读取
+  - `backend/app/services/agent_service.py`: MCP 生效优先级（本轮 > 会话默认 > 全局绑定）与结果回传
+- 验证结果:
+  - `uv run ruff check .` 通过
+  - `uv run ruff format --check .` 通过
+  - `uv run pytest` 通过（6 passed）
+- 影响评估: 对现有 auth/model/chat 基线无破坏，新增 API 均为向后兼容扩展。
+- 文档更新（新增/修改的 docs 文件与更新点）:
+  - 新增 `doc/api/mcp.md`
+  - 更新 `doc/api/agent.md`（增加 MCP 覆盖与降级行为）
+  - 更新 `doc/api/README.md`（MCP 状态更新）
+  - 更新 `doc/DEPLOYMENT.md`（阶段 3 验证示例）
+
+### [2026-02-16 16:00] 阶段 4 首版落地（KB / Retrieval / Export）
+- 问题描述: 需补齐 PRD 阶段 4 的知识库构建、检索与数据导出主流程。
+- 根因定位: 缺失 knowledge_base、retrieval、export 的模型、服务、API 与状态机实现。
+- 解决方案: 新增 KB/文档/切块/导出任务数据模型，补齐构建、检索、打包下载 API，并覆盖自动化测试。
+- 代码变更（文件/函数）:
+  - `backend/app/models/{knowledge_base,kb_document,kb_chunk,export_job,export_item}.py`
+  - `backend/app/services/knowledge_base_service.py`: KB CRUD、build/rebuild、retry-failed、检索
+  - `backend/app/services/export_service.py`: export job 创建、manifest+zip 打包、查询、下载、删除
+  - `backend/app/api/v1/{knowledge_base,retrieval,export}.py`: 阶段 4 API 暴露
+  - `backend/app/api/v1/router.py`: 新增路由挂载
+  - `backend/tests/test_stage4_kb_export_flow.py`: 集成测试
+- 验证结果:
+  - `uv run ruff check .` 通过
+  - `uv run ruff format --check .` 通过
+  - `uv run pytest` 通过（7 passed）
+- 影响评估: 保持 API-First 边界，新增模块与现有 auth/chat/mcp 兼容。
+- 文档更新（新增/修改的 docs 文件与更新点）:
+  - 新增 `doc/api/knowledge_base.md`
+  - 新增 `doc/api/retrieval.md`
+  - 新增 `doc/api/export.md`
+  - 新增 `doc/api/pipeline.md`（最小流程说明）
+  - 更新 `doc/api/README.md`（阶段 4 状态）
+  - 更新 `doc/DEPLOYMENT.md`（阶段 4 验证示例）
+
 ## 待追踪问题
 - 是否引入 Alembic 迁移框架（当前用 `create_all`）
 - refresh token 轮换冲突策略是否需要强一致锁
