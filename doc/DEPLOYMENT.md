@@ -59,7 +59,7 @@ npm run dev
 
 ### 2.4 基础验证
 
-- 浏览器访问前端地址，应出现登录页或首次 Owner 初始化页（视是否已有库而定）。
+- 浏览器访问前端地址，应出现登录/注册页（首次部署也可选 Owner 初始化页）。
 - 调用健康检查或登录接口，确认后端与 DB 正常。
 
 后端最小验证（PowerShell 示例）:
@@ -74,7 +74,7 @@ Invoke-RestMethod -Method POST http://localhost:8000/api/v1/auth/login `
   -Body '{"username":"owner","password":"owner-pass-123"}'
 ```
 
-说明：`owner-pass-123` 仅是示例值，系统没有内置默认 Owner 密码。
+说明：`owner-pass-123` 仅是示例值，系统没有内置默认 Owner 密码。当前默认推荐直接使用注册功能创建用户。
 
 ---
 
@@ -119,7 +119,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_integration.ps1 -D
 
 - **默认仅内网访问**: 绑定 `0.0.0.0` 时注意仅在内网使用，避免默认暴露公网。
 - **敏感配置**: API Key、加密密钥等通过环境变量或首次启动配置页写入，禁止明文提交。
-- **认证策略**: 首次仅开放 `bootstrap-owner` 一次；后续由 Owner/Admin 创建用户。连续登录失败达到阈值会触发临时锁定。
+- **认证策略**: 首次可选 `bootstrap-owner` 一次；也可直接走 `register`。用户的模型/MCP/知识库/聊天/导出均按账号隔离。连续登录失败达到阈值会触发临时锁定。
 - **脱敏与双域**: 严格遵循 PRD「脱敏双域隔离」：Agent 与检索仅访问 Sanitized Workspace，Raw Vault 与 PII 映射库不向 Agent 开放。
 
 ---

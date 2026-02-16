@@ -19,7 +19,7 @@
   4. 仅 `parse_status=done` 可用于 Agent
 
 ## 4) 脱敏规则
-- `POST /api/v1/desensitization/rules`（Owner/Admin）
+- `POST /api/v1/desensitization/rules`（登录用户）
 - `GET /api/v1/desensitization/rules`
 
 规则示例：
@@ -36,3 +36,6 @@
 ## 5) 强制门禁
 - 若检测到高风险 PII（手机号/邮箱/证件号）且未命中脱敏替换，上传返回 `422` + `code=5002`。
 - 未脱敏附件禁止注入 Agent 上下文。
+
+## 6) 数据隔离
+- 会话、消息、附件、脱敏规则与映射库均按用户隔离。

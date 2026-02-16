@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import require_roles
+from app.core.deps import current_user
 from app.core.response import error, ok, trace_id_from_request
 from app.models.agent_mcp_binding import AgentMcpBinding
 from app.models.user import User
@@ -52,12 +52,13 @@ def create_server_api(
     payload: McpServerCreateRequest,
     request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
     try:
         row = create_server(
             db,
+            user_id=user.id,
             name=payload.name,
             endpoint=payload.endpoint,
             auth_type=payload.auth_type,
@@ -74,10 +75,10 @@ def create_server_api(
 def list_server_api(
     request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin", "member", "viewer")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
-    return ok({"items": [_server_to_dict(row) for row in list_servers(db)]}, trace_id)
+    return ok({"items": [_server_to_dict(row) for row in list_servers(db, user_id=user.id)]}, trace_id)
 
 
 @router.patch("/mcp/servers/{server_id}")
@@ -86,12 +87,13 @@ def update_server_api(
     payload: McpServerUpdateRequest,
     request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
     try:
         row = update_server(
             db,
+            user_id=user.id,
             server_id=server_id,
             endpoint=payload.endpoint,
             auth_type=payload.auth_type,
@@ -110,11 +112,11 @@ def delete_server_api(
     server_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
     try:
-        delete_server(db, server_id=server_id)
+        delete_server(db, user_id=user.id, server_id=server_id)
     except McpError as exc:
         return error(exc.code, exc.message, trace_id, status_code=404)
     return ok({"deleted": True}, trace_id)
@@ -125,11 +127,11 @@ def ping_server_api(
     server_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin", "member", "viewer")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
     try:
-        result = ping_server(db, server_id=server_id)
+        result = ping_server(db, user_id=user.id, server_id=server_id)
     except McpError as exc:
         return error(exc.code, exc.message, trace_id, status_code=404)
     return ok(result, trace_id)
@@ -141,12 +143,15 @@ def replace_binding_api(
     payload: AgentBindingUpdateRequest,
     request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
     try:
         rows = replace_agent_bindings(
-            db, agent_name=agent_name, mcp_server_ids=payload.mcp_server_ids
+            db,
+            user_id=user.id,
+            agent_name=agent_name,
+            mcp_server_ids=payload.mcp_server_ids,
         )
     except McpError as exc:
         return error(exc.code, exc.message, trace_id, status_code=400)
@@ -158,8 +163,8 @@ def list_binding_api(
     agent_name: str,
     request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin", "member", "viewer")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
-    rows = list_agent_bindings(db, agent_name=agent_name)
+    rows = list_agent_bindings(db, user_id=user.id, agent_name=agent_name)
     return ok({"items": [_binding_to_dict(row) for row in rows]}, trace_id)

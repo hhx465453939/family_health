@@ -1,7 +1,7 @@
 ﻿# 模型配置 API（阶段 1）
 
 ## 1) Provider
-- `POST /api/v1/model-providers` 创建 provider（Owner/Admin）
+- `POST /api/v1/model-providers` 创建 provider（登录用户）
 - `GET /api/v1/model-providers` 列表
 - `PATCH /api/v1/model-providers/{id}` 更新 base_url/api_key/enabled
 - `DELETE /api/v1/model-providers/{id}` 删除 provider（同时清理该 provider 的模型目录）
@@ -22,3 +22,6 @@
 - Gemini 允许：`temperature/top_p/max_tokens/reasoning_budget`
 - DeepSeek 允许：`temperature/top_p/max_tokens/reasoning_effort`
 - 不支持字段会被自动剔除。
+
+## 5) 数据隔离
+- Provider/Model Catalog/Runtime Profile 全部按用户隔离，只能访问当前登录账号创建的数据。

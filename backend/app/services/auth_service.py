@@ -75,7 +75,11 @@ def _ensure_login_allowed(user: User) -> None:
     now = datetime.now(timezone.utc)
     if user.status != "active":
         raise AuthError(4003, "User disabled")
-    if user.lock_until and user.lock_until > now:
+    lock_until = user.lock_until
+    if lock_until and lock_until.tzinfo is None:
+        # SQLite commonly returns naive datetime even when timezone=True.
+        lock_until = lock_until.replace(tzinfo=timezone.utc)
+    if lock_until and lock_until > now:
         raise AuthError(4004, "User temporarily locked")
 
 

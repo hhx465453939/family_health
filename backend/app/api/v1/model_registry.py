@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import require_roles
+from app.core.deps import current_user
 from app.core.response import error, ok, trace_id_from_request
 from app.models.llm_runtime_profile import LlmRuntimeProfile
 from app.models.model_catalog import ModelCatalog
@@ -73,11 +73,12 @@ def create_provider_api(
     payload: ProviderCreateRequest,
     request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
     row = create_provider(
         db,
+        user_id=user.id,
         provider_name=payload.provider_name,
         base_url=payload.base_url,
         api_key=payload.api_key,
@@ -90,10 +91,10 @@ def create_provider_api(
 def list_provider_api(
     request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
-    return ok({"items": [_provider_to_dict(row) for row in list_providers(db)]}, trace_id)
+    return ok({"items": [_provider_to_dict(row) for row in list_providers(db, user_id=user.id)]}, trace_id)
 
 
 @router.patch("/model-providers/{provider_id}")
@@ -102,12 +103,13 @@ def update_provider_api(
     payload: ProviderUpdateRequest,
     request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
     try:
         row = update_provider(
             db,
+            user_id=user.id,
             provider_id=provider_id,
             base_url=payload.base_url,
             api_key=payload.api_key,
@@ -123,11 +125,11 @@ def delete_provider_api(
     provider_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
     try:
-        delete_provider(db, provider_id=provider_id)
+        delete_provider(db, user_id=user.id, provider_id=provider_id)
     except ModelRegistryError as exc:
         return error(exc.code, exc.message, trace_id, status_code=404)
     return ok({"deleted": True}, trace_id)
@@ -139,11 +141,16 @@ def refresh_models_api(
     payload: RefreshModelsRequest,
     request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
     try:
-        rows = refresh_models(db, provider_id=provider_id, manual_models=payload.manual_models)
+        rows = refresh_models(
+            db,
+            user_id=user.id,
+            provider_id=provider_id,
+            manual_models=payload.manual_models,
+        )
     except ModelRegistryError as exc:
         return error(exc.code, exc.message, trace_id, status_code=404)
     return ok({"items": [_catalog_to_dict(row) for row in rows]}, trace_id)
@@ -155,10 +162,10 @@ def list_catalog_api(
     provider_id: str | None = None,
     model_type: str | None = None,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin", "member", "viewer")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
-    rows = list_catalog(db, provider_id=provider_id, model_type=model_type)
+    rows = list_catalog(db, user_id=user.id, provider_id=provider_id, model_type=model_type)
     return ok({"items": [_catalog_to_dict(row) for row in rows]}, trace_id)
 
 
@@ -167,12 +174,13 @@ def create_runtime_profile_api(
     payload: RuntimeProfileCreateRequest,
     request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
     try:
         row = create_runtime_profile(
             db,
+            user_id=user.id,
             name=payload.name,
             llm_model_id=payload.llm_model_id,
             embedding_model_id=payload.embedding_model_id,
@@ -191,12 +199,13 @@ def update_runtime_profile_api(
     payload: RuntimeProfileUpdateRequest,
     request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
     try:
         row = update_runtime_profile(
             db,
+            user_id=user.id,
             profile_id=profile_id,
             name=payload.name,
             llm_model_id=payload.llm_model_id,
@@ -215,8 +224,8 @@ def update_runtime_profile_api(
 def list_runtime_profile_api(
     request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin", "member", "viewer")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
-    rows = list_runtime_profiles(db)
+    rows = list_runtime_profiles(db, user_id=user.id)
     return ok({"items": [_runtime_profile_to_dict(row) for row in rows]}, trace_id)

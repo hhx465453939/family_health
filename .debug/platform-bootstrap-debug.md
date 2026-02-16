@@ -149,6 +149,20 @@
   - 更新 `doc/api/mcp.md`
   - 更新 `docs/USER_GUIDE.md`
 
+### [2026-02-16 18:50] 修复管理员登录 500（naive/aware datetime 比较）
+- 问题描述: 登录接口在账户锁定判断时抛出 `TypeError: can't compare offset-naive and offset-aware datetimes`，导致 500。
+- 根因定位: SQLite 读出的 `lock_until` 可能是 naive datetime，而代码用 aware datetime (`timezone.utc`) 直接比较。
+- 解决方案: 在 `_ensure_login_allowed` 内统一规范化 `lock_until`，naive 值按 UTC 解释后再比较。
+- 代码变更（文件/函数）:
+  - `backend/app/services/auth_service.py` -> `_ensure_login_allowed`
+  - `backend/tests/test_auth_flow.py` -> 新增锁定后登录回归测试（确保返回 401 而不是 500）
+- 验证结果:
+  - `uv run ruff check .` 通过
+  - `uv run pytest` 通过（10 passed）
+- 影响评估: 仅修复时间比较逻辑，不改变认证业务规则。
+- 文档更新（新增/修改的 docs 文件与更新点）:
+  - 无（现有文档行为描述不变）
+
 ## 待追踪问题
 - 是否引入 Alembic 迁移框架（当前用 `create_all`）
 - refresh token 轮换冲突策略是否需要强一致锁

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import current_user, require_roles
+from app.core.deps import current_user
 from app.core.response import error, ok, trace_id_from_request
 from app.models.user import User
 from app.schemas.export import ExportCreateRequest
@@ -66,7 +66,6 @@ def get_export_job_api(
 @router.get("/exports/jobs/{job_id}/download")
 def download_export_job_api(
     job_id: str,
-    _: User = Depends(require_roles("owner", "admin", "member", "viewer")),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):

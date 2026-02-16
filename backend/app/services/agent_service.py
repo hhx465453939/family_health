@@ -76,11 +76,12 @@ def run_agent_qa(
     session_default_ids = get_session_default_mcp_ids(db, session_id=session_id, user_id=user.id)
     effective_mcp_ids = get_effective_server_ids(
         db,
+        user_id=user.id,
         agent_name="qa",
         session_default_ids=session_default_ids,
         request_override_ids=enabled_mcp_ids,
     )
-    mcp_out = route_tools(db, enabled_server_ids=effective_mcp_ids, query=query)
+    mcp_out = route_tools(db, user_id=user.id, enabled_server_ids=effective_mcp_ids, query=query)
 
     answer = _compose_answer(
         query=normalized_query,

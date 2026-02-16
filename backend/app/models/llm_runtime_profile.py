@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -10,7 +10,8 @@ class LlmRuntimeProfile(Base):
     __tablename__ = "llm_runtime_profiles"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    name: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     llm_model_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     embedding_model_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     reranker_model_id: Mapped[str | None] = mapped_column(String(36), nullable=True)

@@ -5,7 +5,7 @@ import type { McpServer, ModelCatalog, Provider, RuntimeProfile } from "../api/t
 
 type TabKey = "providers" | "runtime" | "mcp";
 
-export function SettingsCenter({ token, role }: { token: string; role: string }) {
+export function SettingsCenter({ token }: { token: string }) {
   const [tab, setTab] = useState<TabKey>("providers");
   const [providers, setProviders] = useState<Provider[]>([]);
   const [catalog, setCatalog] = useState<ModelCatalog[]>([]);
@@ -48,8 +48,6 @@ export function SettingsCenter({ token, role }: { token: string; role: string })
   }
 }`);
 
-  const canManage = role === "owner" || role === "admin";
-
   const llmModels = useMemo(() => catalog.filter((item) => item.model_type === "llm"), [catalog]);
   const embeddingModels = useMemo(() => catalog.filter((item) => item.model_type === "embedding"), [catalog]);
   const rerankerModels = useMemo(() => catalog.filter((item) => item.model_type === "reranker"), [catalog]);
@@ -90,9 +88,6 @@ export function SettingsCenter({ token, role }: { token: string; role: string })
   }, []);
 
   const createProvider = async () => {
-    if (!canManage) {
-      return;
-    }
     try {
       await api.createProvider(providerForm, token);
       setMessage("Provider 已保存");
@@ -151,9 +146,6 @@ export function SettingsCenter({ token, role }: { token: string; role: string })
   };
 
   const createProfile = async () => {
-    if (!canManage) {
-      return;
-    }
     try {
       const params = JSON.parse(profileForm.params) as Record<string, unknown>;
       await api.createRuntimeProfile(
@@ -175,9 +167,6 @@ export function SettingsCenter({ token, role }: { token: string; role: string })
   };
 
   const createMcp = async () => {
-    if (!canManage) {
-      return;
-    }
     try {
       await api.createMcpServer(
         {
@@ -236,9 +225,6 @@ export function SettingsCenter({ token, role }: { token: string; role: string })
   };
 
   const bindQa = async () => {
-    if (!canManage) {
-      return;
-    }
     try {
       await api.bindQaMcpServers(bindingIds, token);
       setMessage("QA Agent MCP 绑定已更新");
@@ -246,10 +232,6 @@ export function SettingsCenter({ token, role }: { token: string; role: string })
       setMessage(error instanceof ApiError ? error.message : "绑定失败");
     }
   };
-
-  if (!canManage) {
-    return <section className="panel">当前角色不可访问设置中心。</section>;
-  }
 
   return (
     <section className="page-grid two-cols">

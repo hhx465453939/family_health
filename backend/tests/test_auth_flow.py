@@ -62,3 +62,25 @@ def test_register_then_login(client):
     )
     assert login_res.status_code == 200
     assert login_res.json()["data"]["access_token"]
+
+
+def test_login_handles_naive_lock_until_without_500(client):
+    bootstrap_res = client.post(
+        "/api/v1/auth/bootstrap-owner",
+        json={"username": "owner", "password": "owner-pass-123", "display_name": "Owner"},
+    )
+    assert bootstrap_res.status_code == 200
+
+    # Trigger temporary lock (internally persists lock_until to DB).
+    for _ in range(5):
+        client.post(
+            "/api/v1/auth/login",
+            json={"username": "owner", "password": "wrong-password"},
+        )
+
+    # Next login should return auth error (locked), and must not crash with 500.
+    login_res = client.post(
+        "/api/v1/auth/login",
+        json={"username": "owner", "password": "owner-pass-123"},
+    )
+    assert login_res.status_code == 401

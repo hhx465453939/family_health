@@ -3,7 +3,7 @@
 import { api, ApiError } from "../api/client";
 import type { ChatMessage, ChatSession, McpServer } from "../api/types";
 
-export function ChatCenter({ token, role }: { token: string; role: string }) {
+export function ChatCenter({ token }: { token: string }) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -13,8 +13,6 @@ export function ChatCenter({ token, role }: { token: string; role: string }) {
   const [message, setMessage] = useState("会话已就绪");
   const [selectedMcpIds, setSelectedMcpIds] = useState<string[]>([]);
   const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
-
-  const canWrite = role !== "viewer";
 
   const activeSession = useMemo(
     () => sessions.find((item) => item.id === activeSessionId) ?? null,
@@ -66,9 +64,6 @@ export function ChatCenter({ token, role }: { token: string; role: string }) {
   }, [activeSession]);
 
   const createSession = async () => {
-    if (!canWrite) {
-      return;
-    }
     try {
       const session = await api.createChatSession(
         {
@@ -151,7 +146,7 @@ export function ChatCenter({ token, role }: { token: string; role: string }) {
       <div className="panel">
         <div className="row-between">
           <h3>会话列表</h3>
-          <button type="button" onClick={createSession} disabled={!canWrite}>
+          <button type="button" onClick={createSession}>
             新建
           </button>
         </div>
@@ -188,16 +183,14 @@ export function ChatCenter({ token, role }: { token: string; role: string }) {
               value={backgroundPrompt}
               onChange={(e) => setBackgroundPrompt(e.target.value)}
               placeholder="例如：你是一名家庭医生，回答要先给风险等级再给建议。"
-              disabled={!canWrite}
             />
           </label>
           <textarea
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="输入健康问题；若留空但已上传附件，将按附件模式发送。"
-            disabled={!canWrite}
           />
-          <button type="button" onClick={sendQa} disabled={!canWrite || !activeSessionId}>
+          <button type="button" onClick={sendQa} disabled={!activeSessionId}>
             发送到 Agent
           </button>
         </div>

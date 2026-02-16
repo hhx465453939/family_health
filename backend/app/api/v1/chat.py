@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, File, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import current_user, require_roles
+from app.core.deps import current_user
 from app.core.response import error, ok, trace_id_from_request
 from app.models.desensitization_rule import DesensitizationRule
 from app.models.user import User
@@ -194,13 +194,14 @@ async def create_attachment_api(
 def create_rule_api(
     payload: DesensitizationRuleCreateRequest,
     request: Request,
+    user: User = Depends(current_user),
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin")),
 ):
     trace_id = trace_id_from_request(request)
     try:
         row = create_rule(
             db,
+            user_id=user.id,
             member_scope=payload.member_scope,
             rule_type=payload.rule_type,
             pattern=payload.pattern,
@@ -225,17 +226,14 @@ def create_rule_api(
 @router.get("/desensitization/rules")
 def list_rule_api(
     request: Request,
-    member_scope: str | None = None,
+    user: User = Depends(current_user),
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin")),
 ):
     trace_id = trace_id_from_request(request)
-    query = db.query(DesensitizationRule).filter(DesensitizationRule.enabled.is_(True))
-    if member_scope:
-        query = query.filter(
-            (DesensitizationRule.member_scope == "global")
-            | (DesensitizationRule.member_scope == member_scope)
-        )
+    query = db.query(DesensitizationRule).filter(
+        DesensitizationRule.user_id == user.id,
+        DesensitizationRule.enabled.is_(True),
+    )
     rows = query.order_by(DesensitizationRule.updated_at.asc()).all()
     return ok(
         {

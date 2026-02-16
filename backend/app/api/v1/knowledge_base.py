@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import current_user, require_roles
+from app.core.deps import current_user
 from app.core.response import error, ok, trace_id_from_request
 from app.models.user import User
 from app.schemas.knowledge_base import KnowledgeBaseBuildRequest, KnowledgeBaseCreateRequest
@@ -24,13 +24,14 @@ router = APIRouter()
 def create_kb_api(
     payload: KnowledgeBaseCreateRequest,
     request: Request,
+    user: User = Depends(current_user),
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin")),
 ):
     trace_id = trace_id_from_request(request)
     try:
         row = create_kb(
             db,
+            user_id=user.id,
             name=payload.name,
             member_scope=payload.member_scope,
             chunk_size=payload.chunk_size,
@@ -48,11 +49,11 @@ def create_kb_api(
 @router.get("/knowledge-bases")
 def list_kb_api(
     request: Request,
+    user: User = Depends(current_user),
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin", "member", "viewer")),
 ):
     trace_id = trace_id_from_request(request)
-    return ok({"items": [kb_to_dict(row) for row in list_kb(db)]}, trace_id)
+    return ok({"items": [kb_to_dict(row) for row in list_kb(db, user_id=user.id)]}, trace_id)
 
 
 @router.post("/knowledge-bases/{kb_id}/build")
@@ -103,12 +104,12 @@ def rebuild_kb_api(
 def retry_failed_api(
     kb_id: str,
     request: Request,
+    user: User = Depends(current_user),
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin")),
 ):
     trace_id = trace_id_from_request(request)
     try:
-        retried = retry_failed_documents(db, kb_id=kb_id)
+        retried = retry_failed_documents(db, kb_id=kb_id, user_id=user.id)
     except KbError as exc:
         return error(exc.code, exc.message, trace_id, status_code=404)
     return ok({"retried": retried}, trace_id)
@@ -118,13 +119,13 @@ def retry_failed_api(
 def list_kb_documents_api(
     kb_id: str,
     request: Request,
+    user: User = Depends(current_user),
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin", "member", "viewer")),
 ):
     trace_id = trace_id_from_request(request)
     try:
-        docs = list_kb_documents(db, kb_id=kb_id)
-        stats = kb_stats(db, kb_id=kb_id)
+        docs = list_kb_documents(db, kb_id=kb_id, user_id=user.id)
+        stats = kb_stats(db, kb_id=kb_id, user_id=user.id)
     except KbError as exc:
         return error(exc.code, exc.message, trace_id, status_code=404)
     return ok({"items": docs, "stats": stats}, trace_id)

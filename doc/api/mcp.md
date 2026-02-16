@@ -13,6 +13,8 @@
 - `PUT /api/v1/mcp/bindings/{agent_name}`
 - `GET /api/v1/mcp/bindings/{agent_name}`
 
+说明：MCP Server 与 Agent 绑定按用户隔离，不共享到其他账号。
+
 ## 3) 前端模板导入建议
 可支持用户粘贴如下 JSON 批量创建工具：
 

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.paths import sanitized_workspace_root
 from app.models.chat_message import ChatMessage
+from app.models.chat_session import ChatSession
 from app.models.export_item import ExportItem
 from app.models.export_job import ExportJob
 from app.models.kb_document import KbDocument
@@ -74,6 +75,8 @@ def create_export_job(
     if "chat" in export_types:
         rows = (
             db.query(ChatMessage)
+            .join(ChatSession, ChatSession.id == ChatMessage.session_id)
+            .filter(ChatSession.user_id == user_id)
             .order_by(ChatMessage.created_at.desc())
             .limit(int(filters.get("chat_limit", 200)))
             .all()
@@ -89,7 +92,11 @@ def create_export_job(
             )
 
     if "kb" in export_types:
-        rows = db.query(KbDocument).filter(KbDocument.masked_path.is_not(None)).all()
+        rows = (
+            db.query(KbDocument)
+            .filter(KbDocument.member_id == user_id, KbDocument.masked_path.is_not(None))
+            .all()
+        )
         for row in rows:
             _add_export_item(
                 db,

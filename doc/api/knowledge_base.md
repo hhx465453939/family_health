@@ -7,6 +7,8 @@
 - `POST /api/v1/knowledge-bases/{id}/retry-failed`
 - `GET /api/v1/knowledge-bases/{id}/documents`
 
+说明：知识库定义、文档与切块均按用户隔离。
+
 ## 构建行为
 - 输入文档 `documents[{title,content}]`
 - 后端执行：线性脱敏 -> 写入 `sanitized_workspace/knowledge_bases/` -> 切块入库

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
@@ -56,13 +56,23 @@ def _clip_params(provider_name: str, params: dict) -> dict:
 
 def create_provider(
     db: Session,
+    user_id: str,
     provider_name: str,
     base_url: str,
     api_key: str,
     enabled: bool,
 ) -> ModelProvider:
+    duplicated = (
+        db.query(ModelProvider)
+        .filter(ModelProvider.user_id == user_id, ModelProvider.provider_name == provider_name)
+        .first()
+    )
+    if duplicated:
+        raise ModelRegistryError(3004, "Provider name already exists for current user")
+
     provider = ModelProvider(
         id=str(uuid4()),
+        user_id=user_id,
         provider_name=provider_name,
         base_url=base_url,
         api_key_encrypted=encrypt_text(api_key),
@@ -74,18 +84,28 @@ def create_provider(
     return provider
 
 
-def list_providers(db: Session) -> list[ModelProvider]:
-    return db.query(ModelProvider).order_by(ModelProvider.updated_at.desc()).all()
+def list_providers(db: Session, user_id: str) -> list[ModelProvider]:
+    return (
+        db.query(ModelProvider)
+        .filter(ModelProvider.user_id == user_id)
+        .order_by(ModelProvider.updated_at.desc())
+        .all()
+    )
 
 
 def update_provider(
     db: Session,
+    user_id: str,
     provider_id: str,
     base_url: str | None,
     api_key: str | None,
     enabled: bool | None,
 ) -> ModelProvider:
-    provider = db.query(ModelProvider).filter(ModelProvider.id == provider_id).first()
+    provider = (
+        db.query(ModelProvider)
+        .filter(ModelProvider.id == provider_id, ModelProvider.user_id == user_id)
+        .first()
+    )
     if not provider:
         raise ModelRegistryError(3001, "Provider not found")
     if base_url is not None:
@@ -99,8 +119,12 @@ def update_provider(
     return provider
 
 
-def delete_provider(db: Session, provider_id: str) -> None:
-    provider = db.query(ModelProvider).filter(ModelProvider.id == provider_id).first()
+def delete_provider(db: Session, user_id: str, provider_id: str) -> None:
+    provider = (
+        db.query(ModelProvider)
+        .filter(ModelProvider.id == provider_id, ModelProvider.user_id == user_id)
+        .first()
+    )
     if not provider:
         raise ModelRegistryError(3001, "Provider not found")
     db.query(ModelCatalog).filter(ModelCatalog.provider_id == provider_id).delete()
@@ -109,9 +133,16 @@ def delete_provider(db: Session, provider_id: str) -> None:
 
 
 def refresh_models(
-    db: Session, provider_id: str, manual_models: list[str] | None = None
+    db: Session,
+    user_id: str,
+    provider_id: str,
+    manual_models: list[str] | None = None,
 ) -> list[ModelCatalog]:
-    provider = db.query(ModelProvider).filter(ModelProvider.id == provider_id).first()
+    provider = (
+        db.query(ModelProvider)
+        .filter(ModelProvider.id == provider_id, ModelProvider.user_id == user_id)
+        .first()
+    )
     if not provider:
         raise ModelRegistryError(3001, "Provider not found")
 
@@ -143,9 +174,19 @@ def refresh_models(
 
 
 def list_catalog(
-    db: Session, provider_id: str | None, model_type: str | None
+    db: Session,
+    user_id: str,
+    provider_id: str | None,
+    model_type: str | None,
 ) -> list[ModelCatalog]:
-    query = db.query(ModelCatalog)
+    provider_ids = [
+        row.id
+        for row in db.query(ModelProvider.id).filter(ModelProvider.user_id == user_id).all()
+    ]
+    if not provider_ids:
+        return []
+
+    query = db.query(ModelCatalog).filter(ModelCatalog.provider_id.in_(provider_ids))
     if provider_id:
         query = query.filter(ModelCatalog.provider_id == provider_id)
     if model_type:
@@ -153,26 +194,38 @@ def list_catalog(
     return query.order_by(ModelCatalog.updated_at.desc()).all()
 
 
-def _ensure_default_profile_uniqueness(db: Session, profile_id: str | None = None) -> None:
-    query = db.query(LlmRuntimeProfile).filter(LlmRuntimeProfile.is_default.is_(True))
+def _ensure_default_profile_uniqueness(
+    db: Session,
+    user_id: str,
+    profile_id: str | None = None,
+) -> None:
+    query = db.query(LlmRuntimeProfile).filter(
+        LlmRuntimeProfile.user_id == user_id,
+        LlmRuntimeProfile.is_default.is_(True),
+    )
     if profile_id:
         query = query.filter(LlmRuntimeProfile.id != profile_id)
     for row in query.all():
         row.is_default = False
 
 
-def _provider_name_for_model(db: Session, model_id: str | None) -> str | None:
+def _provider_name_for_model(db: Session, user_id: str, model_id: str | None) -> str | None:
     if not model_id:
         return None
     model = db.query(ModelCatalog).filter(ModelCatalog.id == model_id).first()
     if not model:
         return None
-    provider = db.query(ModelProvider).filter(ModelProvider.id == model.provider_id).first()
+    provider = (
+        db.query(ModelProvider)
+        .filter(ModelProvider.id == model.provider_id, ModelProvider.user_id == user_id)
+        .first()
+    )
     return provider.provider_name if provider else None
 
 
 def create_runtime_profile(
     db: Session,
+    user_id: str,
     name: str,
     llm_model_id: str | None,
     embedding_model_id: str | None,
@@ -180,17 +233,23 @@ def create_runtime_profile(
     params: dict,
     is_default: bool,
 ) -> LlmRuntimeProfile:
-    if db.query(LlmRuntimeProfile).filter(LlmRuntimeProfile.name == name).first():
+    duplicated = (
+        db.query(LlmRuntimeProfile)
+        .filter(LlmRuntimeProfile.user_id == user_id, LlmRuntimeProfile.name == name)
+        .first()
+    )
+    if duplicated:
         raise ModelRegistryError(3002, "Runtime profile name already exists")
 
-    provider_name = _provider_name_for_model(db, llm_model_id)
+    provider_name = _provider_name_for_model(db, user_id, llm_model_id)
     clipped = _clip_params(provider_name or "", params)
 
     if is_default:
-        _ensure_default_profile_uniqueness(db)
+        _ensure_default_profile_uniqueness(db, user_id=user_id)
 
     profile = LlmRuntimeProfile(
         id=str(uuid4()),
+        user_id=user_id,
         name=name,
         llm_model_id=llm_model_id,
         embedding_model_id=embedding_model_id,
@@ -206,6 +265,7 @@ def create_runtime_profile(
 
 def update_runtime_profile(
     db: Session,
+    user_id: str,
     profile_id: str,
     name: str | None,
     llm_model_id: str | None,
@@ -214,14 +274,22 @@ def update_runtime_profile(
     params: dict | None,
     is_default: bool | None,
 ) -> LlmRuntimeProfile:
-    profile = db.query(LlmRuntimeProfile).filter(LlmRuntimeProfile.id == profile_id).first()
+    profile = (
+        db.query(LlmRuntimeProfile)
+        .filter(LlmRuntimeProfile.id == profile_id, LlmRuntimeProfile.user_id == user_id)
+        .first()
+    )
     if not profile:
         raise ModelRegistryError(3003, "Runtime profile not found")
 
     if name is not None:
         duplicated = (
             db.query(LlmRuntimeProfile)
-            .filter(LlmRuntimeProfile.name == name, LlmRuntimeProfile.id != profile_id)
+            .filter(
+                LlmRuntimeProfile.user_id == user_id,
+                LlmRuntimeProfile.name == name,
+                LlmRuntimeProfile.id != profile_id,
+            )
             .first()
         )
         if duplicated:
@@ -234,13 +302,13 @@ def update_runtime_profile(
     if reranker_model_id is not None:
         profile.reranker_model_id = reranker_model_id
     if params is not None:
-        provider_name = _provider_name_for_model(db, profile.llm_model_id)
+        provider_name = _provider_name_for_model(db, user_id, profile.llm_model_id)
         profile.params_json = json.dumps(
             _clip_params(provider_name or "", params), ensure_ascii=False
         )
     if is_default is not None:
         if is_default:
-            _ensure_default_profile_uniqueness(db, profile_id=profile_id)
+            _ensure_default_profile_uniqueness(db, user_id=user_id, profile_id=profile_id)
         profile.is_default = is_default
 
     db.commit()
@@ -248,5 +316,10 @@ def update_runtime_profile(
     return profile
 
 
-def list_runtime_profiles(db: Session) -> list[LlmRuntimeProfile]:
-    return db.query(LlmRuntimeProfile).order_by(LlmRuntimeProfile.updated_at.desc()).all()
+def list_runtime_profiles(db: Session, user_id: str) -> list[LlmRuntimeProfile]:
+    return (
+        db.query(LlmRuntimeProfile)
+        .filter(LlmRuntimeProfile.user_id == user_id)
+        .order_by(LlmRuntimeProfile.updated_at.desc())
+        .all()
+    )

@@ -26,6 +26,7 @@ def _now() -> datetime:
 
 def create_server(
     db: Session,
+    user_id: str,
     name: str,
     endpoint: str,
     auth_type: str,
@@ -33,10 +34,15 @@ def create_server(
     enabled: bool,
     timeout_ms: int,
 ) -> McpServer:
-    if db.query(McpServer).filter(McpServer.name == name).first():
+    if (
+        db.query(McpServer)
+        .filter(McpServer.user_id == user_id, McpServer.name == name)
+        .first()
+    ):
         raise McpError(6001, "MCP server name already exists")
     row = McpServer(
         id=str(uuid4()),
+        user_id=user_id,
         name=name,
         endpoint=endpoint,
         auth_type=auth_type,
@@ -52,6 +58,7 @@ def create_server(
 
 def update_server(
     db: Session,
+    user_id: str,
     server_id: str,
     endpoint: str | None,
     auth_type: str | None,
@@ -59,7 +66,11 @@ def update_server(
     enabled: bool | None,
     timeout_ms: int | None,
 ) -> McpServer:
-    row = db.query(McpServer).filter(McpServer.id == server_id).first()
+    row = (
+        db.query(McpServer)
+        .filter(McpServer.id == server_id, McpServer.user_id == user_id)
+        .first()
+    )
     if not row:
         raise McpError(6002, "MCP server not found")
     if endpoint is not None:
@@ -78,21 +89,37 @@ def update_server(
     return row
 
 
-def list_servers(db: Session) -> list[McpServer]:
-    return db.query(McpServer).order_by(McpServer.updated_at.desc()).all()
+def list_servers(db: Session, user_id: str) -> list[McpServer]:
+    return (
+        db.query(McpServer)
+        .filter(McpServer.user_id == user_id)
+        .order_by(McpServer.updated_at.desc())
+        .all()
+    )
 
 
-def delete_server(db: Session, server_id: str) -> None:
-    row = db.query(McpServer).filter(McpServer.id == server_id).first()
+def delete_server(db: Session, user_id: str, server_id: str) -> None:
+    row = (
+        db.query(McpServer)
+        .filter(McpServer.id == server_id, McpServer.user_id == user_id)
+        .first()
+    )
     if not row:
         raise McpError(6002, "MCP server not found")
-    db.query(AgentMcpBinding).filter(AgentMcpBinding.mcp_server_id == server_id).delete()
+    db.query(AgentMcpBinding).filter(
+        AgentMcpBinding.user_id == user_id,
+        AgentMcpBinding.mcp_server_id == server_id,
+    ).delete()
     db.delete(row)
     db.commit()
 
 
-def ping_server(db: Session, server_id: str) -> dict:
-    row = db.query(McpServer).filter(McpServer.id == server_id).first()
+def ping_server(db: Session, user_id: str, server_id: str) -> dict:
+    row = (
+        db.query(McpServer)
+        .filter(McpServer.id == server_id, McpServer.user_id == user_id)
+        .first()
+    )
     if not row:
         raise McpError(6002, "MCP server not found")
     if row.endpoint.startswith("mock://fail"):
@@ -104,6 +131,7 @@ def ping_server(db: Session, server_id: str) -> dict:
 
 def get_effective_server_ids(
     db: Session,
+    user_id: str,
     agent_name: str,
     session_default_ids: list[str],
     request_override_ids: list[str] | None,
@@ -114,7 +142,11 @@ def get_effective_server_ids(
         return session_default_ids
     bindings = (
         db.query(AgentMcpBinding)
-        .filter(AgentMcpBinding.agent_name == agent_name, AgentMcpBinding.enabled.is_(True))
+        .filter(
+            AgentMcpBinding.user_id == user_id,
+            AgentMcpBinding.agent_name == agent_name,
+            AgentMcpBinding.enabled.is_(True),
+        )
         .order_by(AgentMcpBinding.priority.asc())
         .all()
     )
@@ -122,20 +154,27 @@ def get_effective_server_ids(
 
 
 def replace_agent_bindings(
-    db: Session, agent_name: str, mcp_server_ids: list[str]
+    db: Session, user_id: str, agent_name: str, mcp_server_ids: list[str]
 ) -> list[AgentMcpBinding]:
     valid_ids = {
-        row.id for row in db.query(McpServer).filter(McpServer.id.in_(mcp_server_ids)).all()
+        row.id
+        for row in db.query(McpServer)
+        .filter(McpServer.user_id == user_id, McpServer.id.in_(mcp_server_ids))
+        .all()
     }
     for item in mcp_server_ids:
         if item not in valid_ids:
             raise McpError(6003, f"MCP server not found: {item}")
 
-    db.query(AgentMcpBinding).filter(AgentMcpBinding.agent_name == agent_name).delete()
+    db.query(AgentMcpBinding).filter(
+        AgentMcpBinding.user_id == user_id,
+        AgentMcpBinding.agent_name == agent_name,
+    ).delete()
     rows: list[AgentMcpBinding] = []
     for idx, server_id in enumerate(mcp_server_ids):
         row = AgentMcpBinding(
             id=str(uuid4()),
+            user_id=user_id,
             agent_name=agent_name,
             mcp_server_id=server_id,
             enabled=True,
@@ -147,10 +186,10 @@ def replace_agent_bindings(
     return rows
 
 
-def list_agent_bindings(db: Session, agent_name: str) -> list[AgentMcpBinding]:
+def list_agent_bindings(db: Session, user_id: str, agent_name: str) -> list[AgentMcpBinding]:
     return (
         db.query(AgentMcpBinding)
-        .filter(AgentMcpBinding.agent_name == agent_name)
+        .filter(AgentMcpBinding.user_id == user_id, AgentMcpBinding.agent_name == agent_name)
         .order_by(AgentMcpBinding.priority.asc())
         .all()
     )
@@ -168,6 +207,7 @@ def _call_single_tool(server: McpServer, query: str) -> dict[str, Any]:
 
 def route_tools(
     db: Session,
+    user_id: str,
     enabled_server_ids: list[str],
     query: str,
 ) -> dict:
@@ -176,7 +216,11 @@ def route_tools(
 
     servers = (
         db.query(McpServer)
-        .filter(McpServer.id.in_(enabled_server_ids), McpServer.enabled.is_(True))
+        .filter(
+            McpServer.user_id == user_id,
+            McpServer.id.in_(enabled_server_ids),
+            McpServer.enabled.is_(True),
+        )
         .all()
     )
     by_id = {row.id: row for row in servers}

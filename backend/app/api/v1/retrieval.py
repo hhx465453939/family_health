@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import require_roles
+from app.core.deps import current_user
 from app.core.response import error, ok, trace_id_from_request
 from app.models.user import User
 from app.schemas.knowledge_base import RetrievalQueryRequest
@@ -16,13 +16,14 @@ def retrieval_query_api(
     payload: RetrievalQueryRequest,
     request: Request,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles("owner", "admin", "member", "viewer")),
+    user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
     try:
         items = retrieve_from_kb(
             db,
             kb_id=payload.kb_id,
+            user_id=user.id,
             query=payload.query,
             top_k=payload.top_k,
         )

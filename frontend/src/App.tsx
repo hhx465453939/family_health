@@ -63,15 +63,12 @@ export function App() {
     if (!session) {
       return [];
     }
-    const base: Array<{ key: NavKey; label: string }> = [
+    return [
+      { key: "settings", label: "设置中心" },
       { key: "chat", label: "聊天中心" },
       { key: "kb", label: "知识库中心" },
       { key: "export", label: "导出中心" },
     ];
-    if (session.role === "owner" || session.role === "admin") {
-      return [{ key: "settings", label: "设置中心" }, ...base];
-    }
-    return base;
   }, [session]);
 
   useEffect(() => {
@@ -135,8 +132,8 @@ export function App() {
           </div>
         </header>
 
-        {activeNav === "settings" && <SettingsCenter token={session.token} role={session.role} />}
-        {activeNav === "chat" && <ChatCenter token={session.token} role={session.role} />}
+        {activeNav === "settings" && <SettingsCenter token={session.token} />}
+        {activeNav === "chat" && <ChatCenter token={session.token} />}
         {activeNav === "kb" && <KnowledgeBaseCenter token={session.token} role={session.role} />}
         {activeNav === "export" && <ExportCenter token={session.token} />}
       </main>

@@ -26,10 +26,11 @@ _HIGH_RISK_PATTERNS = [
 ]
 
 
-def _record_mapping(db: Session, original: str, replacement_token: str) -> None:
+def _record_mapping(db: Session, user_id: str, original: str, replacement_token: str) -> None:
     db.add(
         PiiMappingVault(
             id=str(uuid4()),
+            user_id=user_id,
             mapping_key=str(uuid4()),
             original_value_encrypted=encrypt_text(original),
             replacement_token=replacement_token,
@@ -40,6 +41,7 @@ def _record_mapping(db: Session, original: str, replacement_token: str) -> None:
 
 def create_rule(
     db: Session,
+    user_id: str,
     member_scope: str,
     rule_type: str,
     pattern: str,
@@ -51,6 +53,7 @@ def create_rule(
         raise DesensitizationError(5001, "Unsupported rule_type")
     row = DesensitizationRule(
         id=str(uuid4()),
+        user_id=user_id,
         member_scope=member_scope,
         rule_type=normalized_type,
         pattern=pattern,
@@ -63,13 +66,11 @@ def create_rule(
     return row
 
 
-def list_rules(db: Session, member_scope: str | None = None) -> list[DesensitizationRule]:
-    query = db.query(DesensitizationRule).filter(DesensitizationRule.enabled.is_(True))
-    if member_scope:
-        query = query.filter(
-            (DesensitizationRule.member_scope == "global")
-            | (DesensitizationRule.member_scope == member_scope)
-        )
+def list_rules(db: Session, user_id: str) -> list[DesensitizationRule]:
+    query = db.query(DesensitizationRule).filter(
+        DesensitizationRule.user_id == user_id,
+        DesensitizationRule.enabled.is_(True),
+    )
     return query.order_by(DesensitizationRule.updated_at.asc()).all()
 
 
@@ -85,7 +86,7 @@ def _replace_with_mapping(
 
 
 def sanitize_text(db: Session, user_scope: str, text: str) -> tuple[str, int]:
-    rules = list_rules(db, member_scope=user_scope)
+    rules = list_rules(db, user_id=user_scope)
     sanitized = text
     replacements = 0
 
@@ -99,7 +100,7 @@ def sanitize_text(db: Session, user_scope: str, text: str) -> tuple[str, int]:
         def on_match(matched: str) -> None:
             nonlocal replacements
             replacements += 1
-            _record_mapping(db, matched, rule.replacement_token)
+            _record_mapping(db, user_scope, matched, rule.replacement_token)
 
         sanitized = _replace_with_mapping(regex, sanitized, rule.replacement_token, on_match)
 

@@ -36,6 +36,7 @@ def kb_to_dict(row: KnowledgeBase) -> dict:
 
 def create_kb(
     db: Session,
+    user_id: str,
     name: str,
     member_scope: str,
     chunk_size: int,
@@ -45,10 +46,15 @@ def create_kb(
     embedding_model_id: str | None,
     reranker_model_id: str | None,
 ) -> KnowledgeBase:
-    if db.query(KnowledgeBase).filter(KnowledgeBase.name == name).first():
+    if (
+        db.query(KnowledgeBase)
+        .filter(KnowledgeBase.user_id == user_id, KnowledgeBase.name == name)
+        .first()
+    ):
         raise KbError(7001, "Knowledge base name already exists")
     row = KnowledgeBase(
         id=str(uuid4()),
+        user_id=user_id,
         name=name,
         member_scope=member_scope,
         chunk_size=chunk_size,
@@ -65,8 +71,13 @@ def create_kb(
     return row
 
 
-def list_kb(db: Session) -> list[KnowledgeBase]:
-    return db.query(KnowledgeBase).order_by(KnowledgeBase.updated_at.desc()).all()
+def list_kb(db: Session, user_id: str) -> list[KnowledgeBase]:
+    return (
+        db.query(KnowledgeBase)
+        .filter(KnowledgeBase.user_id == user_id)
+        .order_by(KnowledgeBase.updated_at.desc())
+        .all()
+    )
 
 
 def _split_chunks(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
@@ -81,8 +92,12 @@ def _split_chunks(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
     return chunks
 
 
-def _ensure_kb(db: Session, kb_id: str) -> KnowledgeBase:
-    row = db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
+def _ensure_kb(db: Session, kb_id: str, user_id: str) -> KnowledgeBase:
+    row = (
+        db.query(KnowledgeBase)
+        .filter(KnowledgeBase.id == kb_id, KnowledgeBase.user_id == user_id)
+        .first()
+    )
     if not row:
         raise KbError(7002, "Knowledge base not found")
     return row
@@ -91,7 +106,7 @@ def _ensure_kb(db: Session, kb_id: str) -> KnowledgeBase:
 def build_kb(
     db: Session, kb_id: str, user_id: str, documents: list[dict], clear_existing: bool
 ) -> dict:
-    kb = _ensure_kb(db, kb_id)
+    kb = _ensure_kb(db, kb_id, user_id=user_id)
     kb.status = "building"
 
     if clear_existing:
@@ -160,8 +175,8 @@ def build_kb(
     return {"documents": doc_count, "chunks": total_chunks, "status": kb.status}
 
 
-def retry_failed_documents(db: Session, kb_id: str) -> int:
-    _ensure_kb(db, kb_id)
+def retry_failed_documents(db: Session, kb_id: str, user_id: str) -> int:
+    _ensure_kb(db, kb_id, user_id=user_id)
     rows = (
         db.query(KbDocument).filter(KbDocument.kb_id == kb_id, KbDocument.status == "error").all()
     )
@@ -172,8 +187,10 @@ def retry_failed_documents(db: Session, kb_id: str) -> int:
     return len(rows)
 
 
-def retrieve_from_kb(db: Session, kb_id: str, query: str, top_k: int | None) -> list[dict]:
-    kb = _ensure_kb(db, kb_id)
+def retrieve_from_kb(
+    db: Session, kb_id: str, user_id: str, query: str, top_k: int | None
+) -> list[dict]:
+    kb = _ensure_kb(db, kb_id, user_id=user_id)
     if kb.status not in {"ready", "building", "failed"}:
         raise KbError(7003, "Knowledge base not ready")
 
@@ -201,8 +218,8 @@ def retrieve_from_kb(db: Session, kb_id: str, query: str, top_k: int | None) -> 
     return result
 
 
-def list_kb_documents(db: Session, kb_id: str) -> list[dict]:
-    _ensure_kb(db, kb_id)
+def list_kb_documents(db: Session, kb_id: str, user_id: str) -> list[dict]:
+    _ensure_kb(db, kb_id, user_id=user_id)
     rows = (
         db.query(KbDocument)
         .filter(KbDocument.kb_id == kb_id)
@@ -221,8 +238,8 @@ def list_kb_documents(db: Session, kb_id: str) -> list[dict]:
     ]
 
 
-def kb_stats(db: Session, kb_id: str) -> dict:
-    _ensure_kb(db, kb_id)
+def kb_stats(db: Session, kb_id: str, user_id: str) -> dict:
+    _ensure_kb(db, kb_id, user_id=user_id)
     return {
         "documents": db.query(KbDocument).filter(KbDocument.kb_id == kb_id).count(),
         "chunks": db.query(KbChunk).filter(KbChunk.kb_id == kb_id).count(),
