@@ -70,6 +70,24 @@ Invoke-RestMethod -Method POST http://localhost:8000/api/v1/auth/login `
   -Body '{"username":"owner","password":"owner-pass-123"}'
 ```
 
+阶段 1/2 额外验证（模型目录 + 聊天附件脱敏门禁）:
+
+```powershell
+# 1) 创建模型 provider
+$token = "<access_token>"
+$headers = @{ Authorization = "Bearer $token" }
+Invoke-RestMethod -Method POST http://localhost:8000/api/v1/model-providers `
+  -Headers $headers `
+  -ContentType "application/json" `
+  -Body '{"provider_name":"gemini","base_url":"https://example.local","api_key":"demo","enabled":true}'
+
+# 2) 创建脱敏规则（手机号）
+Invoke-RestMethod -Method POST http://localhost:8000/api/v1/desensitization/rules `
+  -Headers $headers `
+  -ContentType "application/json" `
+  -Body '{"member_scope":"global","rule_type":"literal","pattern":"13800138000","replacement_token":"[PHONE]","enabled":true}'
+```
+
 ---
 
 ## 3. Checkfix 闭环（必选）

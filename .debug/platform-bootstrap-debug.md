@@ -53,6 +53,31 @@
   - 更新 `doc/api/README.md`: auth 模块状态更新为首版已实现
   - 更新 `doc/DEPLOYMENT.md`: 本轮后端运行、验证与认证策略说明
 
+### [2026-02-16 15:05] 阶段 1+2 首版落地（模型配置 + 聊天/附件/Agent）
+- 问题描述: PRD 阶段 1/2 仍缺失后端实现，无法进入前端联调。
+- 根因定位: 缺少 model registry、runtime profile、chat/session、附件脱敏门禁与 agent QA API。
+- 解决方案: 在现有认证基础上新增相关模型、服务、API、文档与测试，先打通最小可运行闭环。
+- 代码变更（文件/函数）:
+  - `backend/app/models/*`: 新增 `model_providers/model_catalog/llm_runtime_profiles/chat_sessions/chat_messages/chat_attachments/desensitization_rules/pii_mapping_vault`
+  - `backend/app/services/model_registry_service.py`: provider 管理、模型刷新、runtime profile 与 capability 裁剪
+  - `backend/app/services/desensitization_service.py`: 线性脱敏、PII 加密映射库写入、未脱敏高风险门禁
+  - `backend/app/services/chat_service.py`: 会话 CRUD、消息、附件上传与 raw/sanitized 双域落盘
+  - `backend/app/services/agent_service.py`: 最小 QA 链路（历史裁剪 + 脱敏附件注入）
+  - `backend/app/api/v1/{model_registry.py,chat.py,agent.py}`: 阶段 1/2 API 暴露
+  - `backend/app/main.py`: 启动时确保双域目录存在
+- 验证结果:
+  - `uv run ruff check .` 通过
+  - `uv run ruff format --check .` 通过（先执行过 `uv run ruff format .`）
+  - `uv run pytest` 通过（4 passed）
+- 影响评估: 新增多模块但保持 API-First 边界；认证模块接口行为不变。
+- 文档更新（新增/修改的 docs 文件与更新点）:
+  - 新增 `doc/api/model_registry.md`
+  - 新增 `doc/api/chat.md`
+  - 新增 `doc/api/agent.md`
+  - 新增 `doc/api/desensitization.md`
+  - 更新 `doc/api/README.md` 模块实现状态
+  - 更新 `doc/DEPLOYMENT.md` 阶段 1/2 验证示例
+
 ## 待追踪问题
 - 是否引入 Alembic 迁移框架（当前用 `create_all`）
 - refresh token 轮换冲突策略是否需要强一致锁
