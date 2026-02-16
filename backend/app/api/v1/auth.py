@@ -10,6 +10,7 @@ from app.schemas.auth import (
     BootstrapOwnerRequest,
     CreateUserRequest,
     LoginRequest,
+    RegisterRequest,
     RefreshRequest,
     UpdateRoleRequest,
     UpdateStatusRequest,
@@ -20,6 +21,7 @@ from app.services.auth_service import (
     create_user,
     login,
     logout,
+    register_user,
     rotate_refresh_token,
 )
 
@@ -48,6 +50,22 @@ def login_api(payload: LoginRequest, request: Request, db: Session = Depends(get
     except AuthError as exc:
         return error(exc.code, exc.message, trace_id, status_code=401)
     return ok(result, trace_id)
+
+
+@router.post("/register")
+def register_api(payload: RegisterRequest, request: Request, db: Session = Depends(get_db)):
+    trace_id = trace_id_from_request(request)
+    try:
+        user = register_user(
+            db,
+            trace_id=trace_id,
+            username=payload.username,
+            password=payload.password,
+            display_name=payload.display_name,
+        )
+    except AuthError as exc:
+        return error(exc.code, exc.message, trace_id, status_code=400)
+    return ok({"id": user.id, "username": user.username, "role": user.role}, trace_id)
 
 
 @router.post("/refresh")

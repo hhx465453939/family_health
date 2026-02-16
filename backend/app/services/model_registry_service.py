@@ -99,6 +99,15 @@ def update_provider(
     return provider
 
 
+def delete_provider(db: Session, provider_id: str) -> None:
+    provider = db.query(ModelProvider).filter(ModelProvider.id == provider_id).first()
+    if not provider:
+        raise ModelRegistryError(3001, "Provider not found")
+    db.query(ModelCatalog).filter(ModelCatalog.provider_id == provider_id).delete()
+    db.delete(provider)
+    db.commit()
+
+
 def refresh_models(
     db: Session, provider_id: str, manual_models: list[str] | None = None
 ) -> list[ModelCatalog]:

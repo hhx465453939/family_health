@@ -69,11 +69,25 @@ export const api = {
     username: string;
     password: string;
   }): Promise<AuthLoginData> => request("/auth/login", { method: "POST", body: JSON.stringify(payload) }),
+  register: (payload: {
+    username: string;
+    password: string;
+    display_name: string;
+  }): Promise<{ id: string; username: string; role: string }> =>
+    request("/auth/register", { method: "POST", body: JSON.stringify(payload) }),
   createProvider: (
     payload: { provider_name: string; base_url: string; api_key: string; enabled: boolean },
     token: string,
   ): Promise<Provider> => request("/model-providers", { method: "POST", body: JSON.stringify(payload) }, token),
   listProviders: (token: string): Promise<{ items: Provider[] }> => request("/model-providers", {}, token),
+  updateProvider: (
+    providerId: string,
+    payload: { base_url?: string; api_key?: string; enabled?: boolean },
+    token: string,
+  ): Promise<Provider> =>
+    request(`/model-providers/${providerId}`, { method: "PATCH", body: JSON.stringify(payload) }, token),
+  deleteProvider: (providerId: string, token: string): Promise<{ deleted: boolean }> =>
+    request(`/model-providers/${providerId}`, { method: "DELETE" }, token),
   refreshProviderModels: (
     providerId: string,
     payload: { manual_models: string[] },
@@ -105,6 +119,8 @@ export const api = {
     token: string,
   ): Promise<McpServer> => request("/mcp/servers", { method: "POST", body: JSON.stringify(payload) }, token),
   listMcpServers: (token: string): Promise<{ items: McpServer[] }> => request("/mcp/servers", {}, token),
+  deleteMcpServer: (serverId: string, token: string): Promise<{ deleted: boolean }> =>
+    request(`/mcp/servers/${serverId}`, { method: "DELETE" }, token),
   bindQaMcpServers: (mcp_server_ids: string[], token: string): Promise<{ items: unknown[] }> =>
     request("/mcp/bindings/qa", { method: "PUT", body: JSON.stringify({ mcp_server_ids }) }, token),
   createChatSession: (
@@ -141,7 +157,8 @@ export const api = {
   qa: (
     payload: {
       session_id: string;
-      query: string;
+      query?: string;
+      background_prompt?: string;
       enabled_mcp_ids?: string[];
       runtime_profile_id?: string | null;
       attachments_ids?: string[];

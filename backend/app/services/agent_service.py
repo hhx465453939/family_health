@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.core.config import settings
 from app.models.chat_message import ChatMessage
 from app.services.chat_service import (
+    ChatError,
     add_message,
     get_attachment_texts,
     get_session_default_mcp_ids,
@@ -17,12 +18,19 @@ def _trim_history(messages: list[dict]) -> list[dict]:
 
 def _compose_answer(
     query: str,
+    background_prompt: str | None,
     history_count: int,
     attachment_count: int,
     mcp_count: int,
 ) -> str:
+    normalized_query = query.strip() or "（未提供文本问题，仅基于附件）"
+    bg_hint = (
+        f"\n角色上下文: {background_prompt.strip()}"
+        if background_prompt and background_prompt.strip()
+        else ""
+    )
     return (
-        f"已收到你的问题：{query}\n"
+        f"已收到你的问题：{normalized_query}{bg_hint}\n"
         f"上下文消息数：{history_count}，附件片段数：{attachment_count}，MCP启用数：{mcp_count}。\n"
         "当前为本地最小 Agent 回答链路，后续可替换为真实 LLM 调用。"
     )
@@ -33,13 +41,20 @@ def run_agent_qa(
     user,
     session_id: str,
     query: str,
+    background_prompt: str | None,
     attachments_ids: list[str] | None,
     enabled_mcp_ids: list[str] | None,
     runtime_profile_id: str | None,
 ) -> dict:
     session = get_session_for_user(db, session_id=session_id, user_id=user.id)
+    normalized_query = query.strip()
+    if not normalized_query and not attachments_ids:
+        raise ChatError(4005, "Please provide text query or upload attachments")
 
-    add_message(db, session_id=session_id, user_id=user.id, role="user", content=query)
+    message_content = normalized_query or "（仅附件模式）"
+    if background_prompt and background_prompt.strip():
+        message_content = f"[SYSTEM]{background_prompt.strip()}\n{message_content}"
+    add_message(db, session_id=session_id, user_id=user.id, role="user", content=message_content)
 
     history = (
         db.query(ChatMessage)
@@ -68,7 +83,8 @@ def run_agent_qa(
     mcp_out = route_tools(db, enabled_server_ids=effective_mcp_ids, query=query)
 
     answer = _compose_answer(
-        query=query,
+        query=normalized_query,
+        background_prompt=background_prompt,
         history_count=len(trimmed),
         attachment_count=len(attachment_texts),
         mcp_count=len(mcp_out["results"]),

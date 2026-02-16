@@ -46,3 +46,19 @@ def test_bootstrap_owner_only_once(client):
     )
     assert second.status_code == 400
     assert second.json()["code"] == 2001
+
+
+def test_register_then_login(client):
+    register_res = client.post(
+        "/api/v1/auth/register",
+        json={"username": "member02", "password": "member-pass-123", "display_name": "Member 02"},
+    )
+    assert register_res.status_code == 200
+    assert register_res.json()["data"]["role"] == "member"
+
+    login_res = client.post(
+        "/api/v1/auth/login",
+        json={"username": "member02", "password": "member-pass-123"},
+    )
+    assert login_res.status_code == 200
+    assert login_res.json()["data"]["access_token"]

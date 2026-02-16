@@ -26,6 +26,7 @@ def agent_qa_api(
             user=user,
             session_id=payload.session_id,
             query=payload.query,
+            background_prompt=payload.background_prompt,
             attachments_ids=payload.attachments_ids,
             enabled_mcp_ids=payload.enabled_mcp_ids,
             runtime_profile_id=payload.runtime_profile_id,

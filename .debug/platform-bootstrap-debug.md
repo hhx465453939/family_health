@@ -124,6 +124,31 @@
   - 更新 `doc/api/README.md`（阶段 4 状态）
   - 更新 `doc/DEPLOYMENT.md`（阶段 4 验证示例）
 
+### [2026-02-16 18:10] 用户体验修复（注册、Provider 管理、附件模式、背景提示词）
+- 问题描述: 设置中心缺少 Provider 删除与模型选择体验；聊天空文本+附件无法发送；缺少背景提示词上下文；登录页无注册入口。
+- 根因定位: API 与前端交互能力缺口，Auth/Agent/ModelRegistry 未覆盖上述场景。
+- 解决方案: 扩展后端接口并联动前端页面交互，补齐注册、Provider 删除、Agent 背景提示词与附件模式。
+- 代码变更（文件/函数）:
+  - `backend/app/api/v1/auth.py`: 新增 `POST /api/v1/auth/register`
+  - `backend/app/services/auth_service.py`: 新增 `register_user`
+  - `backend/app/api/v1/model_registry.py`: 新增 `DELETE /api/v1/model-providers/{id}`
+  - `backend/app/services/model_registry_service.py`: 新增 `delete_provider`
+  - `backend/app/schemas/agent.py`: `query` 改为可空，新增 `background_prompt`
+  - `backend/app/services/agent_service.py`: 支持“仅附件模式”与背景提示词注入，纯空请求拦截
+  - `backend/tests/test_auth_flow.py`: 新增注册后登录用例
+  - `backend/tests/test_phase1_phase2_flow.py`: 新增 provider 删除与附件模式 QA 用例
+- 验证结果:
+  - `uv sync --extra dev` 成功
+  - `uv run ruff check .` 通过
+  - `uv run pytest` 通过（9 passed）
+- 影响评估: 接口向后兼容扩展，现有流程可继续使用。
+- 文档更新（新增/修改的 docs 文件与更新点）:
+  - 更新 `doc/api/auth.md`
+  - 更新 `doc/api/model_registry.md`
+  - 更新 `doc/api/agent.md`
+  - 更新 `doc/api/mcp.md`
+  - 更新 `docs/USER_GUIDE.md`
+
 ## 待追踪问题
 - 是否引入 Alembic 迁移框架（当前用 `create_all`）
 - refresh token 轮换冲突策略是否需要强一致锁

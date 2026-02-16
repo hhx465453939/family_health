@@ -21,6 +21,7 @@ from app.services.model_registry_service import (
     ModelRegistryError,
     create_provider,
     create_runtime_profile,
+    delete_provider,
     list_catalog,
     list_providers,
     list_runtime_profiles,
@@ -115,6 +116,21 @@ def update_provider_api(
     except ModelRegistryError as exc:
         return error(exc.code, exc.message, trace_id, status_code=404)
     return ok(_provider_to_dict(row), trace_id)
+
+
+@router.delete("/model-providers/{provider_id}")
+def delete_provider_api(
+    provider_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles("owner", "admin")),
+):
+    trace_id = trace_id_from_request(request)
+    try:
+        delete_provider(db, provider_id=provider_id)
+    except ModelRegistryError as exc:
+        return error(exc.code, exc.message, trace_id, status_code=404)
+    return ok({"deleted": True}, trace_id)
 
 
 @router.post("/model-providers/{provider_id}/refresh-models")

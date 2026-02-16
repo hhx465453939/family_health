@@ -53,6 +53,22 @@
 - 文档更新（新增/修改的 docs 文件与更新点）:
   - 新增 `docs/USER_GUIDE.md`：登录、设置、聊天、KB、导出操作手册
 
+### [2026-02-16 18:15] UX 修复轮（设置/聊天/注册/MCP模板）
+- 问题描述: 用户反馈设置中心缺少 Provider 管理闭环、聊天不能空文本+附件发送、缺少角色背景提示词、无注册入口、MCP 缺少 JSON 模板导入体验。
+- 根因定位: 首版前端聚焦链路跑通，未补齐运营级管理交互。
+- 解决方案: 增强 Auth/Settings/Chat 页面交互，补充 MCP 模板导入与多卡管理。
+- 代码变更（文件/函数）:
+  - `frontend/src/pages/AuthPage.tsx`: 新增注册模式（register/login/bootstrap 三态）
+  - `frontend/src/pages/SettingsCenter.tsx`: 三页签（供应商/模型选择/MCP工具），Provider 删除与多供应商管理、模型下拉选择、MCP 模板导入
+  - `frontend/src/pages/ChatCenter.tsx`: 背景提示词输入、附件模式发送（无文本可发）
+  - `frontend/src/api/client.ts`: 新增 `register/updateProvider/deleteProvider/deleteMcpServer`，`qa` 增加 `background_prompt`
+- 验证结果:
+  - `npm run lint` 通过
+  - `npm run build` 通过
+- 影响评估: 前端交互增强，不破坏原有页面结构。
+- 文档更新（新增/修改的 docs 文件与更新点）:
+  - 更新 `docs/USER_GUIDE.md`：注册流程、Provider 管理、MCP 模板导入、聊天背景提示词与附件模式
+
 ## 待追踪问题
 - 当前未接入 websocket/流式输出，Agent 回复为请求完成后整条返回。
 - Viewer 角色仅做 UI 按钮层限制，后端权限仍是最终兜底。

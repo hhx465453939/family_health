@@ -204,3 +204,16 @@ def create_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+def register_user(
+    db: Session, trace_id: str, username: str, password: str, display_name: str
+) -> User:
+    return create_user(
+        db=db,
+        trace_id=trace_id,
+        username=username,
+        password=password,
+        display_name=display_name,
+        role="member",
+    )

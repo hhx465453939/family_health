@@ -13,14 +13,16 @@
 - `PUT /api/v1/mcp/bindings/{agent_name}`
 - `GET /api/v1/mcp/bindings/{agent_name}`
 
-用于设置全局默认 MCP 列表（如 `agent_name=qa`）。
+## 3) 前端模板导入建议
+可支持用户粘贴如下 JSON 批量创建工具：
 
-## 3) 路由策略（已实现）
-- 并发上限：`FH_MCP_MAX_PARALLEL_TOOLS`（默认 3）
-- 单工具超时字段：`mcp_servers.timeout_ms`
-- 降级策略：任一工具失败仅写入 `tool_warnings`，不阻断主回答
-
-## 4) ping 约定（当前）
-- `mock://*` -> reachable=true
-- `mock://fail*` -> reachable=false
-- `http*` -> reachable=true（配置层连通性通过）
+```json
+{
+  "mcpServers": {
+    "mcp-pubmed-llm-server": {
+      "command": "npx",
+      "args": ["mcp-pubmed-llm-server"]
+    }
+  }
+}
+```

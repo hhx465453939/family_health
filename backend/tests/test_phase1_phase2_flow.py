@@ -66,6 +66,9 @@ def test_model_registry_and_runtime_profile(client: TestClient):
     assert "reasoning_budget" in params
     assert "reasoning_effort" not in params
 
+    delete_resp = client.delete(f"/api/v1/model-providers/{provider_id}", headers=headers)
+    assert delete_resp.status_code == 200
+
 
 def test_chat_attachment_sanitization_and_agent_qa(client: TestClient):
     access_token = _bootstrap_and_login(client)
@@ -124,3 +127,50 @@ def test_chat_attachment_sanitization_and_agent_qa(client: TestClient):
     )
     assert blocked_resp.status_code == 422
     assert blocked_resp.json()["code"] == 5002
+
+
+def test_chat_attachment_only_mode_with_background_prompt(client: TestClient):
+    access_token = _bootstrap_and_login(client)
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    rule_resp = client.post(
+        "/api/v1/desensitization/rules",
+        json={
+            "member_scope": "global",
+            "rule_type": "literal",
+            "pattern": "13800138000",
+            "replacement_token": "[PHONE]",
+            "enabled": True,
+        },
+        headers=headers,
+    )
+    assert rule_resp.status_code == 200
+
+    session_resp = client.post(
+        "/api/v1/chat/sessions",
+        json={"title": "附件模式"},
+        headers=headers,
+    )
+    assert session_resp.status_code == 200
+    session_id = session_resp.json()["data"]["id"]
+
+    upload_resp = client.post(
+        f"/api/v1/chat/sessions/{session_id}/attachments",
+        headers=headers,
+        files={"file": ("report.txt", "联系方式 13800138000".encode("utf-8"), "text/plain")},
+    )
+    assert upload_resp.status_code == 200
+    attachment_id = upload_resp.json()["data"]["id"]
+
+    qa_resp = client.post(
+        "/api/v1/agent/qa",
+        headers=headers,
+        json={
+            "session_id": session_id,
+            "query": "",
+            "background_prompt": "你是一名家庭医生",
+            "attachments_ids": [attachment_id],
+        },
+    )
+    assert qa_resp.status_code == 200
+    assert qa_resp.json()["data"]["context"]["attachment_chunks"] == 1

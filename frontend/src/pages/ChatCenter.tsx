@@ -9,6 +9,7 @@ export function ChatCenter({ token, role }: { token: string; role: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
   const [query, setQuery] = useState("");
+  const [backgroundPrompt, setBackgroundPrompt] = useState("");
   const [message, setMessage] = useState("会话已就绪");
   const [selectedMcpIds, setSelectedMcpIds] = useState<string[]>([]);
   const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
@@ -103,14 +104,20 @@ export function ChatCenter({ token, role }: { token: string; role: string }) {
   };
 
   const sendQa = async () => {
-    if (!activeSessionId || !query.trim()) {
+    const normalized = query.trim();
+    if (!activeSessionId) {
+      return;
+    }
+    if (!normalized && attachmentIds.length === 0) {
+      setMessage("请输入问题，或上传附件后以附件模式发送");
       return;
     }
     try {
       await api.qa(
         {
           session_id: activeSessionId,
-          query,
+          query: normalized,
+          background_prompt: backgroundPrompt.trim() || undefined,
           enabled_mcp_ids: selectedMcpIds,
           attachments_ids: attachmentIds,
         },
@@ -175,10 +182,19 @@ export function ChatCenter({ token, role }: { token: string; role: string }) {
           ))}
         </div>
         <div className="composer">
+          <label>
+            背景提示词（角色上下文）
+            <textarea
+              value={backgroundPrompt}
+              onChange={(e) => setBackgroundPrompt(e.target.value)}
+              placeholder="例如：你是一名家庭医生，回答要先给风险等级再给建议。"
+              disabled={!canWrite}
+            />
+          </label>
           <textarea
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="输入健康问题，支持结合附件与 MCP。"
+            placeholder="输入健康问题；若留空但已上传附件，将按附件模式发送。"
             disabled={!canWrite}
           />
           <button type="button" onClick={sendQa} disabled={!canWrite || !activeSessionId}>
