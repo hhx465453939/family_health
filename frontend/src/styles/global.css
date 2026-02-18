@@ -191,6 +191,10 @@ button.ghost {
   gap: 14px;
 }
 
+.chat-grid.chat-grid-two {
+  grid-template-columns: 32% 68%;
+}
+
 .list {
   display: grid;
   gap: 8px;
@@ -270,6 +274,26 @@ button.ghost {
   letter-spacing: 0.05em;
   color: var(--text-muted);
   margin-bottom: 4px;
+}
+
+.markdown-body {
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  margin: 6px 0;
+  font-size: 1rem;
+}
+
+.markdown-body p {
+  margin: 0 0 6px 0;
+}
+
+.markdown-body li {
+  margin-left: 18px;
 }
 
 .reasoning-box summary {

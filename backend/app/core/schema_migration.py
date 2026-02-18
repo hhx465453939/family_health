@@ -28,6 +28,11 @@ _SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
         "reasoning_enabled": "BOOLEAN",
         "reasoning_budget": "INTEGER",
         "show_reasoning": "BOOLEAN",
+        "context_message_limit": "INTEGER",
+    },
+    "chat_attachments": {
+        "content_type": "VARCHAR(120)",
+        "is_image": "BOOLEAN",
     },
 }
 
@@ -50,6 +55,14 @@ def _add_missing_columns(
         )
         if table_name == "chat_sessions" and column_name == "show_reasoning":
             conn.exec_driver_sql("UPDATE chat_sessions SET show_reasoning = 1 WHERE show_reasoning IS NULL")
+        if table_name == "chat_sessions" and column_name == "context_message_limit":
+            conn.exec_driver_sql(
+                "UPDATE chat_sessions SET context_message_limit = 20 WHERE context_message_limit IS NULL"
+            )
+        if table_name == "chat_attachments" and column_name == "is_image":
+            conn.exec_driver_sql(
+                "UPDATE chat_attachments SET is_image = 0 WHERE is_image IS NULL"
+            )
         if table_name == "knowledge_bases" and column_name == "use_global_defaults":
             conn.exec_driver_sql(
                 "UPDATE knowledge_bases SET use_global_defaults = 1 WHERE use_global_defaults IS NULL"

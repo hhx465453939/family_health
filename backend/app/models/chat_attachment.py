@@ -19,6 +19,8 @@ class ChatAttachment(Base):
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     raw_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     sanitized_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    is_image: Mapped[bool] = mapped_column(nullable=False, default=False, index=True)
     parse_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending", index=True
     )

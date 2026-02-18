@@ -9,6 +9,7 @@ class ChatSessionCreateRequest(BaseModel):
     reasoning_enabled: bool | None = None
     reasoning_budget: int | None = Field(default=None, ge=0, le=131072)
     show_reasoning: bool = True
+    context_message_limit: int = Field(default=20, ge=1, le=100)
     default_enabled_mcp_ids: list[str] = Field(default_factory=list)
 
 
@@ -20,6 +21,7 @@ class ChatSessionUpdateRequest(BaseModel):
     reasoning_enabled: bool | None = None
     reasoning_budget: int | None = Field(default=None, ge=0, le=131072)
     show_reasoning: bool | None = None
+    context_message_limit: int | None = Field(default=None, ge=1, le=100)
     archived: bool | None = None
     default_enabled_mcp_ids: list[str] | None = None
 

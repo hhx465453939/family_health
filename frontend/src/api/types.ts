@@ -74,6 +74,7 @@ export type ChatSession = {
   reasoning_enabled: boolean | null;
   reasoning_budget: number | null;
   show_reasoning: boolean;
+  context_message_limit: number;
   default_enabled_mcp_ids: string[];
   updated_at: string;
 };

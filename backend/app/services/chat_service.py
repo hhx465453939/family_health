@@ -54,6 +54,7 @@ def session_to_dict(row: ChatSession) -> dict:
         "reasoning_enabled": row.reasoning_enabled,
         "reasoning_budget": row.reasoning_budget,
         "show_reasoning": row.show_reasoning,
+        "context_message_limit": row.context_message_limit,
         "default_enabled_mcp_ids": _load_mcp_ids(row.default_enabled_mcp_ids_json),
         "updated_at": row.updated_at.isoformat(),
     }
@@ -69,6 +70,7 @@ def create_session(
     reasoning_enabled: bool | None,
     reasoning_budget: int | None,
     show_reasoning: bool,
+    context_message_limit: int,
     default_enabled_mcp_ids: list[str],
 ) -> ChatSession:
     row = ChatSession(
@@ -81,6 +83,7 @@ def create_session(
         reasoning_enabled=reasoning_enabled,
         reasoning_budget=reasoning_budget,
         show_reasoning=show_reasoning,
+        context_message_limit=context_message_limit,
         default_enabled_mcp_ids_json=_dump_mcp_ids(default_enabled_mcp_ids),
     )
     db.add(row)
@@ -145,6 +148,7 @@ def update_session(
     reasoning_enabled: bool | None,
     reasoning_budget: int | None,
     show_reasoning: bool | None,
+    context_message_limit: int | None,
     archived: bool | None,
     default_enabled_mcp_ids: list[str] | None,
 ) -> ChatSession:
@@ -163,6 +167,8 @@ def update_session(
         row.reasoning_budget = reasoning_budget
     if show_reasoning is not None:
         row.show_reasoning = show_reasoning
+    if context_message_limit is not None:
+        row.context_message_limit = context_message_limit
     if archived is not None:
         row.archived = archived
     if default_enabled_mcp_ids is not None:
@@ -212,6 +218,7 @@ def add_attachment(
     session_id: str,
     user_id: str,
     file_name: str,
+    content_type: str | None,
     file_bytes: bytes,
 ) -> ChatAttachment:
     _session_for_user(db, session_id, user_id)
@@ -232,6 +239,8 @@ def add_attachment(
         file_name=file_name,
         raw_path=str(raw_path),
         sanitized_path=str(sanitized_path),
+        content_type=content_type,
+        is_image=bool(content_type and content_type.startswith("image/")),
         parse_status="processing",
     )
     db.add(row)
@@ -288,6 +297,31 @@ def get_attachment_texts(
     return texts
 
 
+def get_attachment_meta(
+    db: Session,
+    session_id: str,
+    user_id: str,
+    attachment_ids: list[str],
+) -> list[dict]:
+    _session_for_user(db, session_id, user_id)
+    rows = (
+        db.query(ChatAttachment)
+        .filter(ChatAttachment.session_id == session_id, ChatAttachment.id.in_(attachment_ids))
+        .all()
+    )
+    out: list[dict] = []
+    for row in rows:
+        out.append(
+            {
+                "id": row.id,
+                "file_name": row.file_name,
+                "content_type": row.content_type or "",
+                "is_image": bool(row.is_image),
+            }
+        )
+    return out
+
+
 def get_session_default_mcp_ids(db: Session, session_id: str, user_id: str) -> list[str]:
     session = _session_for_user(db, session_id, user_id)
     return _load_mcp_ids(session.default_enabled_mcp_ids_json)
@@ -305,6 +339,7 @@ def copy_session(db: Session, session_id: str, user_id: str, title_prefix: str =
         reasoning_enabled=source.reasoning_enabled,
         reasoning_budget=source.reasoning_budget,
         show_reasoning=source.show_reasoning,
+        context_message_limit=source.context_message_limit,
         default_enabled_mcp_ids=_load_mcp_ids(source.default_enabled_mcp_ids_json),
     )
     messages = (

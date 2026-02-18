@@ -21,8 +21,8 @@ class ModelRegistryError(Exception):
 
 _DEFAULT_DISCOVERY_BY_PROVIDER = {
     "gemini": [
-        ("gemini-2.0-flash", "llm", {"supports_reasoning_budget": True}),
-        ("gemini-2.0-pro", "llm", {"supports_reasoning_budget": True}),
+        ("gemini-2.0-flash", "llm", {"supports_reasoning_budget": True, "multimodal": True, "input_types": ["text", "image"]}),
+        ("gemini-2.0-pro", "llm", {"supports_reasoning_budget": True, "multimodal": True, "input_types": ["text", "image"]}),
         ("text-embedding-004", "embedding", {}),
     ],
     "deepseek": [

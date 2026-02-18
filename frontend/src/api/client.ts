@@ -170,6 +170,7 @@ export const api = {
       reasoning_enabled?: boolean | null;
       reasoning_budget?: number | null;
       show_reasoning?: boolean;
+      context_message_limit?: number;
       default_enabled_mcp_ids: string[];
     },
     token: string,
@@ -187,6 +188,7 @@ export const api = {
       reasoning_enabled: boolean | null;
       reasoning_budget: number | null;
       show_reasoning: boolean;
+      context_message_limit: number;
       archived: boolean;
       default_enabled_mcp_ids: string[];
     }>,

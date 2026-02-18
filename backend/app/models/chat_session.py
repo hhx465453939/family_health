@@ -18,6 +18,7 @@ class ChatSession(Base):
     reasoning_enabled: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     reasoning_budget: Mapped[int | None] = mapped_column(Integer, nullable=True)
     show_reasoning: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    context_message_limit: Mapped[int] = mapped_column(Integer, nullable=False, default=20)
     default_enabled_mcp_ids_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

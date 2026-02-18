@@ -54,6 +54,7 @@ def create_session_api(
         reasoning_enabled=payload.reasoning_enabled,
         reasoning_budget=payload.reasoning_budget,
         show_reasoning=payload.show_reasoning,
+        context_message_limit=payload.context_message_limit,
         default_enabled_mcp_ids=payload.default_enabled_mcp_ids,
     )
     return ok(session_to_dict(row), trace_id)
@@ -104,6 +105,7 @@ def update_session_api(
             reasoning_enabled=payload.reasoning_enabled,
             reasoning_budget=payload.reasoning_budget,
             show_reasoning=payload.show_reasoning,
+            context_message_limit=payload.context_message_limit,
             archived=payload.archived,
             default_enabled_mcp_ids=payload.default_enabled_mcp_ids,
         )
@@ -279,6 +281,7 @@ async def create_attachment_api(
             session_id=session_id,
             user_id=user.id,
             file_name=file.filename or "attachment.txt",
+            content_type=file.content_type,
             file_bytes=file_bytes,
         )
     except ChatError as exc:

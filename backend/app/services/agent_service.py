@@ -14,6 +14,7 @@ from app.models.model_provider import ModelProvider
 from app.services.chat_service import (
     ChatError,
     add_message,
+    get_attachment_meta,
     get_attachment_texts,
     get_session_default_mcp_ids,
     get_session_for_user,
@@ -22,8 +23,9 @@ from app.services.mcp_service import get_effective_server_ids, route_tools
 from app.services.role_service import get_role_prompt
 
 
-def _trim_history(messages: list[dict]) -> list[dict]:
-    return messages[-settings.chat_context_message_limit :]
+def _trim_history(messages: list[dict], limit: int | None) -> list[dict]:
+    safe_limit = limit or settings.chat_context_message_limit
+    return messages[-safe_limit:]
 
 
 def _load_params(profile: LlmRuntimeProfile) -> dict:
@@ -74,10 +76,22 @@ def _resolve_model_provider(db, user_id: str, profile: LlmRuntimeProfile) -> tup
 def _build_context_suffix(attachment_texts: list[str], mcp_results: list[dict]) -> str:
     blocks: list[str] = []
     if attachment_texts:
-        blocks.append("Sanitized attachment context:\n" + "\n\n".join(attachment_texts))
+        clipped: list[str] = []
+        for idx, text in enumerate(attachment_texts, start=1):
+            normalized = text.strip()
+            if len(normalized) > 1600:
+                normalized = normalized[:1600] + "\n...[truncated]"
+            clipped.append(f"[Attachment {idx}]\n{normalized}")
+        blocks.append("Sanitized attachment context:\n" + "\n\n".join(clipped))
     if mcp_results:
         blocks.append("MCP tool outputs:\n" + "\n".join(str(item.get("output", "")) for item in mcp_results))
-    return "\n\n" + "\n\n".join(blocks) if blocks else ""
+    suffix = "\n\n" + "\n\n".join(blocks) if blocks else ""
+    if suffix:
+        suffix += (
+            "\n\nInstruction: Use attachment/tool context to analyze and conclude. "
+            "Do not copy long raw passages verbatim; summarize and give actionable feedback."
+        )
+    return suffix
 
 
 def _role_name(role: str) -> str:
@@ -99,6 +113,24 @@ def _effective_system_prompt(session, request_background_prompt: str | None) -> 
 
 def _reasoning_settings(session) -> tuple[bool | None, int | None, bool]:
     return session.reasoning_enabled, session.reasoning_budget, bool(session.show_reasoning)
+
+
+def _model_capabilities(model: ModelCatalog) -> dict:
+    try:
+        raw = json.loads(model.capabilities_json or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _model_supports_vision(model: ModelCatalog) -> bool:
+    caps = _model_capabilities(model)
+    if bool(caps.get("multimodal")):
+        return True
+    inputs = caps.get("input_types")
+    if isinstance(inputs, list) and "image" in inputs:
+        return True
+    return False
 
 
 def _openai_payload(
@@ -276,10 +308,15 @@ def _prepare_context(
         .order_by(ChatMessage.created_at.asc())
         .all()
     )
-    trimmed = _trim_history([{"role": _role_name(m.role), "content": m.content} for m in history])
+    trimmed = _trim_history(
+        [{"role": _role_name(m.role), "content": m.content} for m in history],
+        limit=getattr(session, "context_message_limit", None),
+    )
 
     attachment_texts: list[str] = []
+    attachment_meta: list[dict] = []
     if attachments_ids:
+        attachment_meta = get_attachment_meta(db, session_id, user.id, attachments_ids)
         attachment_texts = get_attachment_texts(db, session_id, user.id, attachments_ids)
 
     if runtime_profile_id:
@@ -309,6 +346,7 @@ def _prepare_context(
         "effective_mcp_ids": effective_mcp_ids,
         "system_prompt": _effective_system_prompt(session, background_prompt),
         "runtime_profile_id": runtime_profile_id,
+        "attachment_meta": attachment_meta,
     }
 
 
@@ -339,6 +377,8 @@ def run_agent_qa(
     try:
         profile = _resolve_runtime_profile(db, user.id, runtime_profile_id, session)
         model, provider = _resolve_model_provider(db, user.id, profile)
+        if any(item.get("is_image") for item in ctx["attachment_meta"]) and not _model_supports_vision(model):
+            raise ChatError(7010, "Current model is not multimodal; image upload is disabled for this chat")
         params = _load_params(profile)
         provider_name = provider.provider_name.lower()
         if "gemini" in provider_name:
@@ -439,6 +479,8 @@ def stream_agent_qa(
     try:
         profile = _resolve_runtime_profile(db, user.id, runtime_profile_id, session)
         model, provider = _resolve_model_provider(db, user.id, profile)
+        if any(item.get("is_image") for item in ctx["attachment_meta"]) and not _model_supports_vision(model):
+            raise ChatError(7010, "Current model is not multimodal; image upload is disabled for this chat")
         params = _load_params(profile)
         provider_name = provider.provider_name.lower()
 

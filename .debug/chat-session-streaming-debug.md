@@ -116,3 +116,20 @@
   - 现库校验：`rule user_id True`、`pii user_id True`
   - `uv run ruff check .` 通过
   - `uv run pytest tests/test_schema_migration.py tests/test_attachment_upload_parsing.py` 通过
+
+### [2026-02-18 23:05] Chat UX & memory/multimodal enhancements
+- Added session-level `context_message_limit` (1-100) and applied in history trimming.
+- Added attachment metadata columns (`content_type`, `is_image`) with SQLite startup migration support.
+- Added multimodal guard: image attachments are rejected at QA runtime when model capabilities are not multimodal.
+- Improved attachment context injection: clipped context + anti-verbatim instruction to reduce raw text echo.
+- Added model capability defaults for Gemini multimodal discovery.
+- Frontend ChatCenter redesign:
+  - Attachment upload moved into chatbox icon, supports paste-to-upload.
+  - MCP selector moved into composer icon area.
+  - Markdown-like rendering with proper line wraps.
+  - Per-message actions: copy / export md / export pdf(print).
+  - Multi-message share via generated URL (`session` + `msgs`).
+- Checkfix:
+  - `uv run ruff check .` passed
+  - `uv run pytest` passed (17 passed)
+  - `npm run build` passed
