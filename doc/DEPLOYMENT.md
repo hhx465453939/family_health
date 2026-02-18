@@ -37,6 +37,8 @@ uv sync
   ```bash
   uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
   ```
+- **兼容迁移**:
+  - 启动时会自动执行 SQLite 轻量兼容迁移（仅补齐缺失列，不清空数据），用于兼容旧数据库结构导致的设置中心/聊天中心 `500` 问题。
 - **数据目录**（首次运行会自动创建）:
   - `data/raw_vault/` — 未脱敏域
   - `data/sanitized_workspace/` — 脱敏域
