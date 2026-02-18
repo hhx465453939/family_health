@@ -144,7 +144,22 @@ export const api = {
     },
     token: string,
   ): Promise<RuntimeProfile> => request("/runtime-profiles", { method: "POST", body: JSON.stringify(payload) }, token),
+  updateRuntimeProfile: (
+    profileId: string,
+    payload: Partial<{
+      name: string;
+      llm_model_id: string | null;
+      embedding_model_id: string | null;
+      reranker_model_id: string | null;
+      params: Record<string, unknown>;
+      is_default: boolean;
+    }>,
+    token: string,
+  ): Promise<RuntimeProfile> =>
+    request(`/runtime-profiles/${profileId}`, { method: "PATCH", body: JSON.stringify(payload) }, token),
   listRuntimeProfiles: (token: string): Promise<{ items: RuntimeProfile[] }> => request("/runtime-profiles", {}, token),
+  deleteRuntimeProfile: (profileId: string, token: string): Promise<{ deleted: boolean }> =>
+    request(`/runtime-profiles/${profileId}`, { method: "DELETE" }, token),
   createMcpServer: (
     payload: {
       name: string;

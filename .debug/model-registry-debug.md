@@ -99,3 +99,27 @@
 - 验证
   - `uv run ruff check .` 通过
   - `uv run pytest tests/test_phase1_phase2_flow.py` 通过
+
+### [2026-02-19 00:32] Runtime Profile 管理能力补齐（查看/编辑/删除）
+- 问题
+  - Runtime Profile 仅支持创建与列表，缺少基本管理闭环。
+- 解决
+  - 后端新增删除接口：`DELETE /api/v1/runtime-profiles/{profile_id}`。
+  - 前端 API 客户端新增：`updateRuntimeProfile`、`deleteRuntimeProfile`。
+  - 设置中心 Runtime 页重构：
+    - 列表增加小图标操作（查看/编辑/删除）。
+    - 支持将条目载入表单查看（只读）或编辑（可保存）。
+    - 表单支持重置并区分创建/更新动作。
+  - 样式优化：runtime 列表行与图标操作区域对齐、hover 显示层级提升。
+- 影响文件
+  - `backend/app/services/model_registry_service.py`
+  - `backend/app/api/v1/model_registry.py`
+  - `frontend/src/api/client.ts`
+  - `frontend/src/pages/SettingsCenter.tsx`
+  - `frontend/src/styles/global.css`
+  - `backend/tests/test_phase1_phase2_flow.py`
+  - `docs/USER_GUIDE.md`
+- 验证
+  - `uv run ruff check .` 通过
+  - `uv run pytest tests/test_phase1_phase2_flow.py` 通过
+  - `npm run build` 通过

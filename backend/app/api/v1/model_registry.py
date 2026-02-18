@@ -21,6 +21,7 @@ from app.services.model_registry_service import (
     ModelRegistryError,
     create_provider,
     create_runtime_profile,
+    delete_runtime_profile,
     delete_provider,
     list_provider_presets,
     list_catalog,
@@ -243,3 +244,18 @@ def list_runtime_profile_api(
     trace_id = trace_id_from_request(request)
     rows = list_runtime_profiles(db, user_id=user.id)
     return ok({"items": [_runtime_profile_to_dict(row) for row in rows]}, trace_id)
+
+
+@router.delete("/runtime-profiles/{profile_id}")
+def delete_runtime_profile_api(
+    profile_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    trace_id = trace_id_from_request(request)
+    try:
+        delete_runtime_profile(db, user_id=user.id, profile_id=profile_id)
+    except ModelRegistryError as exc:
+        return error(exc.code, exc.message, trace_id, status_code=404)
+    return ok({"deleted": True}, trace_id)

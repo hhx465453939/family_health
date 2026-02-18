@@ -94,9 +94,24 @@ def test_model_registry_and_runtime_profile(client: TestClient):
         headers=headers,
     )
     assert profile_resp.status_code == 200
+    profile_id = profile_resp.json()["data"]["id"]
     params = profile_resp.json()["data"]["params"]
     assert "reasoning_budget" in params
     assert "reasoning_effort" not in params
+
+    update_profile_resp = client.patch(
+        f"/api/v1/runtime-profiles/{profile_id}",
+        json={"name": "default-updated"},
+        headers=headers,
+    )
+    assert update_profile_resp.status_code == 200
+    assert update_profile_resp.json()["data"]["name"] == "default-updated"
+
+    delete_profile_resp = client.delete(
+        f"/api/v1/runtime-profiles/{profile_id}",
+        headers=headers,
+    )
+    assert delete_profile_resp.status_code == 200
 
     delete_resp = client.delete(f"/api/v1/model-providers/{provider_id}", headers=headers)
     assert delete_resp.status_code == 200

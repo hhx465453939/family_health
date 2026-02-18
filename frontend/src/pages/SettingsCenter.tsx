@@ -42,6 +42,16 @@ const TEXT = {
     pleaseSelect: "请选择",
     paramsJson: "参数 JSON",
     createProfile: "创建 Runtime Profile",
+    updateProfile: "更新 Runtime Profile",
+    resetForm: "重置",
+    viewLabel: "查看",
+    editLabel: "编辑",
+    deleteLabel: "删除",
+    profileLoaded: "Runtime Profile 已加载",
+    profileUpdated: "Runtime Profile 已更新",
+    profileUpdateFailed: "Runtime Profile 更新失败",
+    profileDeleted: "Runtime Profile 已删除",
+    profileDeleteFailed: "Runtime Profile 删除失败",
     profileCreated: "Runtime Profile 已创建",
     profileCreateFailed: "Runtime Profile 创建失败",
     mcpHelpPrefix: "支持按 npx/命令参数自动生成配置，当前共",
@@ -106,6 +116,16 @@ const TEXT = {
     pleaseSelect: "Select",
     paramsJson: "Params JSON",
     createProfile: "Create Runtime Profile",
+    updateProfile: "Update Runtime Profile",
+    resetForm: "Reset",
+    viewLabel: "View",
+    editLabel: "Edit",
+    deleteLabel: "Delete",
+    profileLoaded: "Runtime Profile loaded",
+    profileUpdated: "Runtime Profile updated",
+    profileUpdateFailed: "Failed to update Runtime Profile",
+    profileDeleted: "Runtime Profile deleted",
+    profileDeleteFailed: "Failed to delete Runtime Profile",
     profileCreated: "Runtime Profile created",
     profileCreateFailed: "Failed to create Runtime Profile",
     mcpHelpPrefix: "Auto-generate MCP config from command args. Total tools:",
@@ -137,6 +157,14 @@ const TEXT = {
   },
 } as const;
 
+function Icon({ d }: { d: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d={d} />
+    </svg>
+  );
+}
+
 export function SettingsCenter({ token, locale }: { token: string; locale: Locale }) {
   const text = TEXT[locale];
   const [tab, setTab] = useState<TabKey>("providers");
@@ -164,6 +192,8 @@ export function SettingsCenter({ token, locale }: { token: string; locale: Local
     params: '{"temperature":0.2}',
     is_default: true,
   });
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
+  const [profileReadonly, setProfileReadonly] = useState(false);
   const [mcpForm, setMcpForm] = useState({
     name: "tool-a",
     command: "npx",
@@ -297,24 +327,88 @@ export function SettingsCenter({ token, locale }: { token: string; locale: Local
     }
   };
 
-  const createProfile = async () => {
+  const fillProfileForm = (item: RuntimeProfile, readonly: boolean) => {
+    setEditingProfileId(item.id);
+    setProfileReadonly(readonly);
+    setProfileForm({
+      name: item.name,
+      llm_model_id: item.llm_model_id || "",
+      embedding_model_id: item.embedding_model_id || "",
+      reranker_model_id: item.reranker_model_id || "",
+      params: JSON.stringify(item.params ?? {}, null, 2),
+      is_default: item.is_default,
+    });
+    setMessage(text.profileLoaded);
+  };
+
+  const resetProfileForm = () => {
+    setEditingProfileId(null);
+    setProfileReadonly(false);
+    setProfileForm({
+      name: "default-profile",
+      llm_model_id: "",
+      embedding_model_id: "",
+      reranker_model_id: "",
+      params: '{"temperature":0.2}',
+      is_default: true,
+    });
+  };
+
+  const submitProfile = async () => {
+    if (profileReadonly) {
+      return;
+    }
     try {
       const params = JSON.parse(profileForm.params) as Record<string, unknown>;
-      await api.createRuntimeProfile(
-        {
-          name: profileForm.name,
-          llm_model_id: profileForm.llm_model_id || null,
-          embedding_model_id: profileForm.embedding_model_id || null,
-          reranker_model_id: profileForm.reranker_model_id || null,
-          params,
-          is_default: profileForm.is_default,
-        },
-        token,
-      );
-      setMessage(text.profileCreated);
+      if (editingProfileId) {
+        await api.updateRuntimeProfile(
+          editingProfileId,
+          {
+            name: profileForm.name,
+            llm_model_id: profileForm.llm_model_id || null,
+            embedding_model_id: profileForm.embedding_model_id || null,
+            reranker_model_id: profileForm.reranker_model_id || null,
+            params,
+            is_default: profileForm.is_default,
+          },
+          token,
+        );
+        setMessage(text.profileUpdated);
+      } else {
+        await api.createRuntimeProfile(
+          {
+            name: profileForm.name,
+            llm_model_id: profileForm.llm_model_id || null,
+            embedding_model_id: profileForm.embedding_model_id || null,
+            reranker_model_id: profileForm.reranker_model_id || null,
+            params,
+            is_default: profileForm.is_default,
+          },
+          token,
+        );
+        setMessage(text.profileCreated);
+      }
+      resetProfileForm();
       await loadData();
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : text.profileCreateFailed);
+      if (editingProfileId) {
+        setMessage(error instanceof ApiError ? error.message : text.profileUpdateFailed);
+      } else {
+        setMessage(error instanceof ApiError ? error.message : text.profileCreateFailed);
+      }
+    }
+  };
+
+  const removeProfile = async (profileId: string) => {
+    try {
+      await api.deleteRuntimeProfile(profileId, token);
+      if (editingProfileId === profileId) {
+        resetProfileForm();
+      }
+      setMessage(text.profileDeleted);
+      await loadData();
+    } catch (error) {
+      setMessage(error instanceof ApiError ? error.message : text.profileDeleteFailed);
     }
   };
 
@@ -451,11 +545,11 @@ export function SettingsCenter({ token, locale }: { token: string; locale: Local
             <p className="muted">{text.runtimeHelp}</p>
             <label>
               {text.profileName}
-              <input value={profileForm.name} onChange={(e) => setProfileForm((s) => ({ ...s, name: e.target.value }))} />
+              <input value={profileForm.name} onChange={(e) => setProfileForm((s) => ({ ...s, name: e.target.value }))} disabled={profileReadonly} />
             </label>
             <label>
               {text.llmModel}
-              <select value={profileForm.llm_model_id} onChange={(e) => setProfileForm((s) => ({ ...s, llm_model_id: e.target.value }))}>
+              <select value={profileForm.llm_model_id} onChange={(e) => setProfileForm((s) => ({ ...s, llm_model_id: e.target.value }))} disabled={profileReadonly}>
                 <option value="">{text.pleaseSelect}</option>
                 {llmModels.map((item) => (
                   <option key={item.id} value={item.id}>{item.model_name}</option>
@@ -464,7 +558,7 @@ export function SettingsCenter({ token, locale }: { token: string; locale: Local
             </label>
             <label>
               {text.embeddingModel}
-              <select value={profileForm.embedding_model_id} onChange={(e) => setProfileForm((s) => ({ ...s, embedding_model_id: e.target.value }))}>
+              <select value={profileForm.embedding_model_id} onChange={(e) => setProfileForm((s) => ({ ...s, embedding_model_id: e.target.value }))} disabled={profileReadonly}>
                 <option value="">{text.pleaseSelect}</option>
                 {embeddingModels.map((item) => (
                   <option key={item.id} value={item.id}>{item.model_name}</option>
@@ -473,7 +567,7 @@ export function SettingsCenter({ token, locale }: { token: string; locale: Local
             </label>
             <label>
               {text.rerankerModel}
-              <select value={profileForm.reranker_model_id} onChange={(e) => setProfileForm((s) => ({ ...s, reranker_model_id: e.target.value }))}>
+              <select value={profileForm.reranker_model_id} onChange={(e) => setProfileForm((s) => ({ ...s, reranker_model_id: e.target.value }))} disabled={profileReadonly}>
                 <option value="">{text.pleaseSelect}</option>
                 {rerankerModels.map((item) => (
                   <option key={item.id} value={item.id}>{item.model_name}</option>
@@ -482,14 +576,33 @@ export function SettingsCenter({ token, locale }: { token: string; locale: Local
             </label>
             <label>
               {text.paramsJson}
-              <textarea value={profileForm.params} onChange={(e) => setProfileForm((s) => ({ ...s, params: e.target.value }))} />
+              <textarea value={profileForm.params} onChange={(e) => setProfileForm((s) => ({ ...s, params: e.target.value }))} disabled={profileReadonly} />
             </label>
-            <button type="button" onClick={createProfile}>{text.createProfile}</button>
+            <div className="actions">
+              <button type="button" onClick={submitProfile} disabled={profileReadonly}>
+                {editingProfileId ? text.updateProfile : text.createProfile}
+              </button>
+              <button type="button" className="ghost" onClick={resetProfileForm}>{text.resetForm}</button>
+            </div>
             <div className="list">
               {profiles.map((item) => (
-                <div key={item.id} className="list-item">
-                  <strong>{item.name}</strong>
-                  <small>default={String(item.is_default)}</small>
+                <div key={item.id} className="list-item profile-row">
+                  <div>
+                    <strong>{item.name}</strong>
+                    <small>{item.id}</small>
+                    <small>default={String(item.is_default)}</small>
+                  </div>
+                  <div className="icon-actions">
+                    <button type="button" className="icon-btn" title={text.viewLabel} onClick={() => fillProfileForm(item, true)}>
+                      <Icon d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />
+                    </button>
+                    <button type="button" className="icon-btn" title={text.editLabel} onClick={() => fillProfileForm(item, false)}>
+                      <Icon d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+                    </button>
+                    <button type="button" className="icon-btn danger" title={text.deleteLabel} onClick={() => void removeProfile(item.id)}>
+                      <Icon d="M3 6h18M8 6V4h8v2M7 6l1 14h8l1-14M10 10v7M14 10v7" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
