@@ -1,9 +1,12 @@
-﻿:root {
+:root {
   --font-display: "Bodoni MT", "Times New Roman", serif;
   --font-body: "Segoe UI", "Noto Sans SC", sans-serif;
 
-  --bg-deep: #0f1a1c;
-  --bg-soft: #1c2a2f;
+  --bg-gradient:
+    radial-gradient(circle at 90% 10%, rgba(31, 138, 120, 0.35), transparent 34%),
+    radial-gradient(circle at 20% 95%, rgba(227, 187, 112, 0.24), transparent 30%),
+    linear-gradient(140deg, #0e1618 0%, #102428 52%, #122f32 100%);
+  --body-text: #f0ece3;
   --panel: rgba(244, 240, 230, 0.88);
   --panel-strong: rgba(255, 251, 242, 0.95);
   --text-main: #1a2228;
@@ -12,8 +15,33 @@
   --accent-strong: #155e52;
   --danger: #a23939;
   --line: rgba(26, 34, 40, 0.14);
+  --topbar-bg: rgba(255, 251, 242, 0.14);
+  --nav-bg: rgba(255, 255, 255, 0.06);
+  --nav-text: #f7f3ea;
+  --nav-active: rgba(31, 138, 120, 0.82);
+  --card-shadow: 0 18px 44px rgba(8, 15, 18, 0.22);
 
   --radius-lg: 16px;
   --radius-md: 10px;
-  --shadow: 0 18px 44px rgba(8, 15, 18, 0.22);
+}
+
+:root[data-theme="light"] {
+  --bg-gradient:
+    radial-gradient(circle at 12% 12%, rgba(52, 148, 198, 0.2), transparent 34%),
+    radial-gradient(circle at 88% 86%, rgba(238, 164, 91, 0.22), transparent 30%),
+    linear-gradient(145deg, #f1f7fb 0%, #eef4f0 52%, #e9f0f5 100%);
+  --body-text: #1f2d36;
+  --panel: rgba(255, 255, 255, 0.86);
+  --panel-strong: rgba(255, 255, 255, 0.96);
+  --text-main: #1f2d36;
+  --text-muted: #5a6f7b;
+  --accent: #1f7a9d;
+  --accent-strong: #11536f;
+  --danger: #b23a48;
+  --line: rgba(31, 45, 54, 0.13);
+  --topbar-bg: rgba(255, 255, 255, 0.44);
+  --nav-bg: rgba(255, 255, 255, 0.55);
+  --nav-text: #21323e;
+  --nav-active: rgba(31, 122, 157, 0.82);
+  --card-shadow: 0 10px 30px rgba(35, 52, 65, 0.14);
 }

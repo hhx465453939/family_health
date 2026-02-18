@@ -1,24 +1,151 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { api, ApiError } from "../api/client";
-import type {
-  McpServer,
-  ModelCatalog,
-  Provider,
-  ProviderPreset,
-  RuntimeProfile,
-} from "../api/types";
+import type { McpServer, ModelCatalog, Provider, ProviderPreset, RuntimeProfile } from "../api/types";
 
 type TabKey = "providers" | "runtime" | "mcp";
+type Locale = "zh" | "en";
 
-export function SettingsCenter({ token }: { token: string }) {
+const TEXT = {
+  zh: {
+    ready: "准备就绪",
+    loadFailed: "加载设置数据失败",
+    tabProviders: "供应商",
+    tabRuntime: "模型选择",
+    tabMcp: "MCP 工具",
+    title: "设置中心",
+    providerHelp: "支持预置端点一键填充和自定义完整端点（可持续新增）。",
+    providerSearch: "搜索供应商",
+    providerPreset: "预置供应商",
+    providerName: "Provider",
+    baseUrl: "Base URL",
+    apiKey: "API Key（更新时可填）",
+    addProvider: "新增 Provider",
+    manualModels: "手动补充模型（逗号分隔）",
+    refreshModels: "刷新模型",
+    update: "更新",
+    delete: "删除",
+    providerRequired: "请填写 Provider、Base URL、API Key",
+    providerSaved: "Provider 已保存",
+    providerSaveFailed: "Provider 保存失败",
+    providerUpdated: "Provider 已更新",
+    providerUpdateFailed: "Provider 更新失败",
+    providerDeleted: "Provider 已删除",
+    providerDeleteFailed: "Provider 删除失败",
+    catalogRefreshed: "模型目录已刷新",
+    catalogRefreshFailed: "模型刷新失败",
+    runtimeHelp: "从模型目录下拉选择 LLM/Embedding/Reranker。",
+    profileName: "Profile 名称",
+    llmModel: "LLM 模型",
+    embeddingModel: "Embedding 模型",
+    rerankerModel: "Reranker 模型",
+    pleaseSelect: "请选择",
+    paramsJson: "参数 JSON",
+    createProfile: "创建 Runtime Profile",
+    profileCreated: "Runtime Profile 已创建",
+    profileCreateFailed: "Runtime Profile 创建失败",
+    mcpHelpPrefix: "支持按 npx/命令参数自动生成配置，当前共",
+    mcpHelpSuffix: "个工具。",
+    mcpName: "MCP 名称",
+    mcpCommand: "启动命令",
+    mcpArgs: "启动参数（空格分隔）",
+    createMcp: "创建 MCP Server",
+    mcpTemplate: "MCP JSON 模板导入",
+    importTemplate: "批量导入模板",
+    qaBinding: "QA 全局 MCP 绑定",
+    updateBinding: "更新 QA 绑定",
+    mcpNeedNameCmd: "请填写 MCP 名称和启动命令",
+    mcpCreated: "MCP Server 已创建",
+    mcpCreateFailed: "MCP 创建失败",
+    mcpDeleted: "MCP Server 已删除",
+    mcpDeleteFailed: "MCP 删除失败",
+    templateEmpty: "模板中没有 mcpServers 配置",
+    templateImported: "已导入 MCP 工具数",
+    templateImportFailed: "MCP 模板解析或导入失败",
+    bindDone: "QA Agent MCP 绑定已更新",
+    bindFailed: "绑定失败",
+    overview: "配置概览",
+    providerCount: "Provider 数量",
+    mcpCount: "MCP 数量",
+    catalogCount: "模型目录条目",
+    profileCount: "Runtime Profile 数量",
+    custom: "custom",
+  },
+  en: {
+    ready: "Ready",
+    loadFailed: "Failed to load settings",
+    tabProviders: "Providers",
+    tabRuntime: "Runtime",
+    tabMcp: "MCP",
+    title: "Settings",
+    providerHelp: "Use provider presets or add custom full endpoints.",
+    providerSearch: "Search providers",
+    providerPreset: "Provider preset",
+    providerName: "Provider",
+    baseUrl: "Base URL",
+    apiKey: "API Key (optional on update)",
+    addProvider: "Add Provider",
+    manualModels: "Manual models (comma-separated)",
+    refreshModels: "Refresh Models",
+    update: "Update",
+    delete: "Delete",
+    providerRequired: "Provider, Base URL and API Key are required",
+    providerSaved: "Provider saved",
+    providerSaveFailed: "Failed to save provider",
+    providerUpdated: "Provider updated",
+    providerUpdateFailed: "Failed to update provider",
+    providerDeleted: "Provider deleted",
+    providerDeleteFailed: "Failed to delete provider",
+    catalogRefreshed: "Model catalog refreshed",
+    catalogRefreshFailed: "Failed to refresh model catalog",
+    runtimeHelp: "Select LLM/Embedding/Reranker from model catalog.",
+    profileName: "Profile name",
+    llmModel: "LLM model",
+    embeddingModel: "Embedding model",
+    rerankerModel: "Reranker model",
+    pleaseSelect: "Select",
+    paramsJson: "Params JSON",
+    createProfile: "Create Runtime Profile",
+    profileCreated: "Runtime Profile created",
+    profileCreateFailed: "Failed to create Runtime Profile",
+    mcpHelpPrefix: "Auto-generate MCP config from command args. Total tools:",
+    mcpHelpSuffix: "",
+    mcpName: "MCP name",
+    mcpCommand: "Launch command",
+    mcpArgs: "Launch args (space-separated)",
+    createMcp: "Create MCP Server",
+    mcpTemplate: "Import MCP JSON template",
+    importTemplate: "Import Template",
+    qaBinding: "QA global MCP binding",
+    updateBinding: "Update QA Binding",
+    mcpNeedNameCmd: "MCP name and command are required",
+    mcpCreated: "MCP Server created",
+    mcpCreateFailed: "Failed to create MCP Server",
+    mcpDeleted: "MCP Server deleted",
+    mcpDeleteFailed: "Failed to delete MCP Server",
+    templateEmpty: "No mcpServers found in template",
+    templateImported: "Imported MCP tools",
+    templateImportFailed: "Failed to parse/import MCP template",
+    bindDone: "QA MCP binding updated",
+    bindFailed: "Failed to update binding",
+    overview: "Overview",
+    providerCount: "Providers",
+    mcpCount: "MCP Servers",
+    catalogCount: "Catalog Items",
+    profileCount: "Runtime Profiles",
+    custom: "custom",
+  },
+} as const;
+
+export function SettingsCenter({ token, locale }: { token: string; locale: Locale }) {
+  const text = TEXT[locale];
   const [tab, setTab] = useState<TabKey>("providers");
   const [providers, setProviders] = useState<Provider[]>([]);
   const [providerPresets, setProviderPresets] = useState<ProviderPreset[]>([]);
   const [catalog, setCatalog] = useState<ModelCatalog[]>([]);
   const [profiles, setProfiles] = useState<RuntimeProfile[]>([]);
   const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
-  const [message, setMessage] = useState("准备就绪");
+  const [message, setMessage] = useState<string>(text.ready);
 
   const [providerFilter, setProviderFilter] = useState("");
   const [providerForm, setProviderForm] = useState({
@@ -37,7 +164,6 @@ export function SettingsCenter({ token }: { token: string }) {
     params: '{"temperature":0.2}',
     is_default: true,
   });
-
   const [mcpForm, setMcpForm] = useState({
     name: "tool-a",
     command: "npx",
@@ -74,15 +200,8 @@ export function SettingsCenter({ token }: { token: string }) {
     );
   }, [providerFilter, providers]);
 
-  const buildCommandEndpoint = (command: string, args: string[]): string => {
-    return `command://${command} ${args.join(" ")}`.trim();
-  };
-
-  const splitArgs = (raw: string): string[] =>
-    raw
-      .split(" ")
-      .map((item) => item.trim())
-      .filter(Boolean);
+  const buildCommandEndpoint = (command: string, args: string[]): string => `command://${command} ${args.join(" ")}`.trim();
+  const splitArgs = (raw: string): string[] => raw.split(" ").map((item) => item.trim()).filter(Boolean);
 
   const loadData = async () => {
     try {
@@ -99,8 +218,7 @@ export function SettingsCenter({ token }: { token: string }) {
       setProfiles(profileRes.items);
       setMcpServers(mcpRes.items);
     } catch (error) {
-      const text = error instanceof ApiError ? error.message : "加载设置数据失败";
-      setMessage(text);
+      setMessage(error instanceof ApiError ? error.message : text.loadFailed);
     }
   };
 
@@ -110,23 +228,15 @@ export function SettingsCenter({ token }: { token: string }) {
 
   useEffect(() => {
     const preset = providerPresets.find((item) => item.provider_name === providerPresetKey);
-    if (!preset || providerPresetKey === "custom") {
+    if (!preset || providerPresetKey === text.custom) {
       return;
     }
-    setProviderForm((prev) => ({
-      ...prev,
-      provider_name: preset.provider_name,
-      base_url: preset.base_url,
-    }));
-  }, [providerPresetKey, providerPresets]);
+    setProviderForm((prev) => ({ ...prev, provider_name: preset.provider_name, base_url: preset.base_url }));
+  }, [providerPresetKey, providerPresets, text.custom]);
 
   const createProvider = async () => {
-    if (
-      !providerForm.provider_name.trim() ||
-      !providerForm.base_url.trim() ||
-      !providerForm.api_key.trim()
-    ) {
-      setMessage("请填写 Provider、Base URL、API Key");
+    if (!providerForm.provider_name.trim() || !providerForm.base_url.trim() || !providerForm.api_key.trim()) {
+      setMessage(text.providerRequired);
       return;
     }
     try {
@@ -139,11 +249,11 @@ export function SettingsCenter({ token }: { token: string }) {
         },
         token,
       );
-      setMessage("Provider 已保存");
+      setMessage(text.providerSaved);
       setProviderForm((prev) => ({ ...prev, api_key: "" }));
       await loadData();
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "Provider 保存失败");
+      setMessage(error instanceof ApiError ? error.message : text.providerSaveFailed);
     }
   };
 
@@ -151,27 +261,23 @@ export function SettingsCenter({ token }: { token: string }) {
     try {
       await api.updateProvider(
         provider.id,
-        {
-          base_url: provider.base_url,
-          enabled: provider.enabled,
-          api_key: providerForm.api_key || undefined,
-        },
+        { base_url: provider.base_url, enabled: provider.enabled, api_key: providerForm.api_key || undefined },
         token,
       );
-      setMessage(`Provider 已更新: ${provider.provider_name}`);
+      setMessage(`${text.providerUpdated}: ${provider.provider_name}`);
       await loadData();
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "Provider 更新失败");
+      setMessage(error instanceof ApiError ? error.message : text.providerUpdateFailed);
     }
   };
 
   const deleteProvider = async (providerId: string) => {
     try {
       await api.deleteProvider(providerId, token);
-      setMessage("Provider 已删除");
+      setMessage(text.providerDeleted);
       await loadData();
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "Provider 删除失败");
+      setMessage(error instanceof ApiError ? error.message : text.providerDeleteFailed);
     }
   };
 
@@ -180,17 +286,14 @@ export function SettingsCenter({ token }: { token: string }) {
       await api.refreshProviderModels(
         providerId,
         {
-          manual_models: manualModels
-            .split(",")
-            .map((x) => x.trim())
-            .filter(Boolean),
+          manual_models: manualModels.split(",").map((x) => x.trim()).filter(Boolean),
         },
         token,
       );
-      setMessage("模型目录已刷新");
+      setMessage(text.catalogRefreshed);
       await loadData();
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "模型刷新失败");
+      setMessage(error instanceof ApiError ? error.message : text.catalogRefreshFailed);
     }
   };
 
@@ -208,16 +311,16 @@ export function SettingsCenter({ token }: { token: string }) {
         },
         token,
       );
-      setMessage("Runtime Profile 已创建");
+      setMessage(text.profileCreated);
       await loadData();
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "Runtime Profile 创建失败");
+      setMessage(error instanceof ApiError ? error.message : text.profileCreateFailed);
     }
   };
 
   const createMcp = async () => {
     if (!mcpForm.name.trim() || !mcpForm.command.trim()) {
-      setMessage("请填写 MCP 名称和启动命令");
+      setMessage(text.mcpNeedNameCmd);
       return;
     }
     try {
@@ -233,128 +336,98 @@ export function SettingsCenter({ token }: { token: string }) {
         },
         token,
       );
-      setMessage("MCP Server 已创建");
+      setMessage(text.mcpCreated);
       await loadData();
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "MCP 创建失败");
+      setMessage(error instanceof ApiError ? error.message : text.mcpCreateFailed);
     }
   };
 
   const deleteMcp = async (serverId: string) => {
     try {
       await api.deleteMcpServer(serverId, token);
-      setMessage("MCP Server 已删除");
+      setMessage(text.mcpDeleted);
       await loadData();
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "MCP 删除失败");
+      setMessage(error instanceof ApiError ? error.message : text.mcpDeleteFailed);
     }
   };
 
   const importMcpTemplate = async () => {
     try {
-      const parsed = JSON.parse(mcpTemplate) as {
-        mcpServers?: Record<string, { command?: string; args?: string[] }>;
-      };
+      const parsed = JSON.parse(mcpTemplate) as { mcpServers?: Record<string, { command?: string; args?: string[] }> };
       const servers = parsed.mcpServers ?? {};
       const entries = Object.entries(servers);
       if (entries.length === 0) {
-        setMessage("模板中没有 mcpServers 配置");
+        setMessage(text.templateEmpty);
         return;
       }
       for (const [name, cfg] of entries) {
         const args = Array.isArray(cfg.args) ? cfg.args : [];
         const endpoint = buildCommandEndpoint(cfg.command ?? "npx", args);
         await api.createMcpServer(
-          {
-            name,
-            endpoint,
-            auth_type: "none",
-            enabled: true,
-            timeout_ms: 8000,
-          },
+          { name, endpoint, auth_type: "none", enabled: true, timeout_ms: 8000 },
           token,
         );
       }
-      setMessage(`已导入 ${entries.length} 个 MCP 工具`);
+      setMessage(`${text.templateImported}: ${entries.length}`);
       await loadData();
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "MCP 模板解析或导入失败");
+      setMessage(error instanceof ApiError ? error.message : text.templateImportFailed);
     }
   };
 
   const bindQa = async () => {
     try {
       await api.bindQaMcpServers(bindingIds, token);
-      setMessage("QA Agent MCP 绑定已更新");
+      setMessage(text.bindDone);
     } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : "绑定失败");
+      setMessage(error instanceof ApiError ? error.message : text.bindFailed);
     }
   };
 
   return (
     <section className="page-grid two-cols">
       <div className="panel">
-        <h3>设置中心</h3>
+        <h3>{text.title}</h3>
         <div className="actions">
-          <button type="button" className={tab === "providers" ? "" : "ghost"} onClick={() => setTab("providers")}>
-            供应商
-          </button>
-          <button type="button" className={tab === "runtime" ? "" : "ghost"} onClick={() => setTab("runtime")}>
-            模型选择
-          </button>
-          <button type="button" className={tab === "mcp" ? "" : "ghost"} onClick={() => setTab("mcp")}>
-            MCP 工具
-          </button>
+          <button type="button" className={tab === "providers" ? "" : "ghost"} onClick={() => setTab("providers")}>{text.tabProviders}</button>
+          <button type="button" className={tab === "runtime" ? "" : "ghost"} onClick={() => setTab("runtime")}>{text.tabRuntime}</button>
+          <button type="button" className={tab === "mcp" ? "" : "ghost"} onClick={() => setTab("mcp")}>{text.tabMcp}</button>
         </div>
 
         {tab === "providers" && (
           <>
-            <p className="muted">支持预置端点一键填充和自定义完整端点（可持续新增）。</p>
+            <p className="muted">{text.providerHelp}</p>
             <label>
-              搜索供应商
+              {text.providerSearch}
               <input value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)} />
             </label>
             <label>
-              预置供应商
+              {text.providerPreset}
               <select value={providerPresetKey} onChange={(e) => setProviderPresetKey(e.target.value)}>
                 {providerPresets.map((item) => (
-                  <option key={item.provider_name} value={item.provider_name}>
-                    {item.label}
-                  </option>
+                  <option key={item.provider_name} value={item.provider_name}>{item.label}</option>
                 ))}
               </select>
             </label>
             <label>
-              Provider
-              <input
-                value={providerForm.provider_name}
-                onChange={(e) => setProviderForm((s) => ({ ...s, provider_name: e.target.value }))}
-              />
+              {text.providerName}
+              <input value={providerForm.provider_name} onChange={(e) => setProviderForm((s) => ({ ...s, provider_name: e.target.value }))} />
             </label>
             <label>
-              Base URL
-              <input
-                value={providerForm.base_url}
-                onChange={(e) => setProviderForm((s) => ({ ...s, base_url: e.target.value }))}
-              />
+              {text.baseUrl}
+              <input value={providerForm.base_url} onChange={(e) => setProviderForm((s) => ({ ...s, base_url: e.target.value }))} />
             </label>
             <label>
-              API Key（更新时可填）
-              <input
-                value={providerForm.api_key}
-                onChange={(e) => setProviderForm((s) => ({ ...s, api_key: e.target.value }))}
-                type="password"
-              />
+              {text.apiKey}
+              <input value={providerForm.api_key} onChange={(e) => setProviderForm((s) => ({ ...s, api_key: e.target.value }))} type="password" />
             </label>
-            <button type="button" onClick={createProvider}>
-              新增 Provider
-            </button>
-
+            <button type="button" onClick={createProvider}>{text.addProvider}</button>
             <label>
-              手动补充模型(逗号分隔)
+              {text.manualModels}
               <input value={manualModels} onChange={(e) => setManualModels(e.target.value)} />
             </label>
-
             <div className="list">
               {filteredProviders.map((item) => (
                 <div key={item.id} className="list-item">
@@ -363,15 +436,9 @@ export function SettingsCenter({ token }: { token: string }) {
                     <small>{item.base_url}</small>
                   </div>
                   <div className="actions">
-                    <button type="button" onClick={() => void refreshProvider(item.id)}>
-                      刷新模型
-                    </button>
-                    <button type="button" className="ghost" onClick={() => void updateProvider(item)}>
-                      更新
-                    </button>
-                    <button type="button" className="ghost" onClick={() => void deleteProvider(item.id)}>
-                      删除
-                    </button>
+                    <button type="button" onClick={() => void refreshProvider(item.id)}>{text.refreshModels}</button>
+                    <button type="button" className="ghost" onClick={() => void updateProvider(item)}>{text.update}</button>
+                    <button type="button" className="ghost" onClick={() => void deleteProvider(item.id)}>{text.delete}</button>
                   </div>
                 </div>
               ))}
@@ -381,70 +448,43 @@ export function SettingsCenter({ token }: { token: string }) {
 
         {tab === "runtime" && (
           <>
-            <p className="muted">从模型目录下拉选择 LLM/Embedding/Reranker。</p>
+            <p className="muted">{text.runtimeHelp}</p>
             <label>
-              Profile 名称
-              <input
-                value={profileForm.name}
-                onChange={(e) => setProfileForm((s) => ({ ...s, name: e.target.value }))}
-              />
+              {text.profileName}
+              <input value={profileForm.name} onChange={(e) => setProfileForm((s) => ({ ...s, name: e.target.value }))} />
             </label>
             <label>
-              LLM 模型
-              <select
-                value={profileForm.llm_model_id}
-                onChange={(e) => setProfileForm((s) => ({ ...s, llm_model_id: e.target.value }))}
-              >
-                <option value="">请选择</option>
+              {text.llmModel}
+              <select value={profileForm.llm_model_id} onChange={(e) => setProfileForm((s) => ({ ...s, llm_model_id: e.target.value }))}>
+                <option value="">{text.pleaseSelect}</option>
                 {llmModels.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.model_name}
-                  </option>
+                  <option key={item.id} value={item.id}>{item.model_name}</option>
                 ))}
               </select>
             </label>
             <label>
-              Embedding 模型
-              <select
-                value={profileForm.embedding_model_id}
-                onChange={(e) =>
-                  setProfileForm((s) => ({ ...s, embedding_model_id: e.target.value }))
-                }
-              >
-                <option value="">请选择</option>
+              {text.embeddingModel}
+              <select value={profileForm.embedding_model_id} onChange={(e) => setProfileForm((s) => ({ ...s, embedding_model_id: e.target.value }))}>
+                <option value="">{text.pleaseSelect}</option>
                 {embeddingModels.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.model_name}
-                  </option>
+                  <option key={item.id} value={item.id}>{item.model_name}</option>
                 ))}
               </select>
             </label>
             <label>
-              Reranker 模型
-              <select
-                value={profileForm.reranker_model_id}
-                onChange={(e) =>
-                  setProfileForm((s) => ({ ...s, reranker_model_id: e.target.value }))
-                }
-              >
-                <option value="">请选择</option>
+              {text.rerankerModel}
+              <select value={profileForm.reranker_model_id} onChange={(e) => setProfileForm((s) => ({ ...s, reranker_model_id: e.target.value }))}>
+                <option value="">{text.pleaseSelect}</option>
                 {rerankerModels.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.model_name}
-                  </option>
+                  <option key={item.id} value={item.id}>{item.model_name}</option>
                 ))}
               </select>
             </label>
             <label>
-              Params(JSON)
-              <textarea
-                value={profileForm.params}
-                onChange={(e) => setProfileForm((s) => ({ ...s, params: e.target.value }))}
-              />
+              {text.paramsJson}
+              <textarea value={profileForm.params} onChange={(e) => setProfileForm((s) => ({ ...s, params: e.target.value }))} />
             </label>
-            <button type="button" onClick={createProfile}>
-              创建 Runtime Profile
-            </button>
+            <button type="button" onClick={createProfile}>{text.createProfile}</button>
             <div className="list">
               {profiles.map((item) => (
                 <div key={item.id} className="list-item">
@@ -458,62 +498,40 @@ export function SettingsCenter({ token }: { token: string }) {
 
         {tab === "mcp" && (
           <>
-            <p className="muted">支持按 npx/命令参数自动生成配置，当前共 {mcpServers.length} 个工具。</p>
+            <p className="muted">{text.mcpHelpPrefix} {mcpServers.length} {text.mcpHelpSuffix}</p>
             <label>
-              MCP 名称
-              <input
-                value={mcpForm.name}
-                onChange={(e) => setMcpForm((s) => ({ ...s, name: e.target.value }))}
-              />
+              {text.mcpName}
+              <input value={mcpForm.name} onChange={(e) => setMcpForm((s) => ({ ...s, name: e.target.value }))} />
             </label>
             <label>
-              启动命令
-              <input
-                value={mcpForm.command}
-                onChange={(e) => setMcpForm((s) => ({ ...s, command: e.target.value }))}
-                placeholder="npx"
-              />
+              {text.mcpCommand}
+              <input value={mcpForm.command} onChange={(e) => setMcpForm((s) => ({ ...s, command: e.target.value }))} placeholder="npx" />
             </label>
             <label>
-              启动参数（空格分隔）
-              <input
-                value={mcpForm.args}
-                onChange={(e) => setMcpForm((s) => ({ ...s, args: e.target.value }))}
-                placeholder="mcp-pubmed-llm-server"
-              />
+              {text.mcpArgs}
+              <input value={mcpForm.args} onChange={(e) => setMcpForm((s) => ({ ...s, args: e.target.value }))} placeholder="mcp-pubmed-llm-server" />
             </label>
-            <button type="button" onClick={createMcp}>
-              创建 MCP Server
-            </button>
+            <button type="button" onClick={createMcp}>{text.createMcp}</button>
 
             <label>
-              MCP JSON 模板导入
+              {text.mcpTemplate}
               <textarea value={mcpTemplate} onChange={(e) => setMcpTemplate(e.target.value)} rows={8} />
             </label>
-            <button type="button" onClick={importMcpTemplate}>
-              批量导入模板
-            </button>
+            <button type="button" onClick={importMcpTemplate}>{text.importTemplate}</button>
 
             <label>
-              QA 全局 MCP 绑定
+              {text.qaBinding}
               <select
                 multiple
                 value={bindingIds}
-                onChange={(e) => {
-                  const values = Array.from(e.target.selectedOptions).map((opt) => opt.value);
-                  setBindingIds(values);
-                }}
+                onChange={(e) => setBindingIds(Array.from(e.target.selectedOptions).map((opt) => opt.value))}
               >
                 {mcpServers.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
+                  <option key={item.id} value={item.id}>{item.name}</option>
                 ))}
               </select>
             </label>
-            <button type="button" onClick={bindQa}>
-              更新 QA 绑定
-            </button>
+            <button type="button" onClick={bindQa}>{text.updateBinding}</button>
 
             <div className="list">
               {mcpServers.map((item) => (
@@ -522,9 +540,7 @@ export function SettingsCenter({ token }: { token: string }) {
                     <strong>{item.name}</strong>
                     <small>{item.endpoint}</small>
                   </div>
-                  <button type="button" className="ghost" onClick={() => void deleteMcp(item.id)}>
-                    删除
-                  </button>
+                  <button type="button" className="ghost" onClick={() => void deleteMcp(item.id)}>{text.delete}</button>
                 </div>
               ))}
             </div>
@@ -535,24 +551,12 @@ export function SettingsCenter({ token }: { token: string }) {
       </div>
 
       <div className="panel">
-        <h3>配置概览</h3>
+        <h3>{text.overview}</h3>
         <div className="mini-grid">
-          <div>
-            <h4>Provider 数量</h4>
-            <p>{providers.length}</p>
-          </div>
-          <div>
-            <h4>MCP 数量</h4>
-            <p>{mcpServers.length}</p>
-          </div>
-          <div>
-            <h4>模型目录条目</h4>
-            <p>{catalog.length}</p>
-          </div>
-          <div>
-            <h4>Runtime Profile</h4>
-            <p>{profiles.length}</p>
-          </div>
+          <div><h4>{text.providerCount}</h4><p>{providers.length}</p></div>
+          <div><h4>{text.mcpCount}</h4><p>{mcpServers.length}</p></div>
+          <div><h4>{text.catalogCount}</h4><p>{catalog.length}</p></div>
+          <div><h4>{text.profileCount}</h4><p>{profiles.length}</p></div>
         </div>
       </div>
     </section>

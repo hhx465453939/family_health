@@ -15,8 +15,14 @@
 
 const API_PREFIX = "/api/v1";
 export const AUTH_EXPIRED_EVENT = "fh:auth-expired";
+type UiLocale = "zh" | "en";
+let uiLocale: UiLocale = "zh";
 
 let authExpiredNotified = false;
+
+export function setApiLocale(locale: UiLocale): void {
+  uiLocale = locale;
+}
 
 function notifyAuthExpired(): void {
   if (authExpiredNotified) {
@@ -69,7 +75,10 @@ async function request<T>(
       response.status === 401 &&
       /missing bearer token|invalid token|invalid token type|user not found/i.test(message)
     ) {
-      message = "登录状态已失效，请重新登录后重试";
+      message =
+        uiLocale === "zh"
+          ? "登录状态已失效，请重新登录后重试"
+          : "Authentication expired. Please sign in again.";
       notifyAuthExpired();
     }
     throw new ApiError(message, maybeEnvelope.code ?? response.status, maybeEnvelope.trace_id ?? "unknown");

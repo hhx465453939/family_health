@@ -44,3 +44,16 @@
 ## Follow-ups
 - Add pagination/search UI for large session lists.
 - Add cancellation control for in-flight stream.
+
+## [2026-02-18] UX pass: i18n + theme + chat session UX polish
+- Scope: frontend App/Auth/Chat/Settings/KB/Export + global styles
+- Changes:
+  - Added bilingual UI (zh/en) toggle and persisted locale state in App.
+  - Added light/dark theme toggle and CSS token theming via data-theme.
+  - Reworked ChatCenter session rows with compact icon actions (copy/branch/export/share/delete).
+  - Added share-link copy per session via URL query param.
+  - Implemented smoother stream rendering with buffered queue + timed drain.
+  - Added reasoning panel auto-collapse when stream finishes; final answer remains primary.
+  - Fixed AuthPage mojibake by rewriting page text and locale wiring.
+- Verification:
+  - npm run build (frontend) passed.
