@@ -51,6 +51,11 @@ def create_rule(
     normalized_type = rule_type.lower()
     if normalized_type not in {"literal", "regex"}:
         raise DesensitizationError(5001, "Unsupported rule_type")
+    if normalized_type == "regex":
+        try:
+            re.compile(pattern)
+        except re.error as exc:
+            raise DesensitizationError(5003, "Invalid regex pattern") from exc
     row = DesensitizationRule(
         id=str(uuid4()),
         user_id=user_id,
@@ -91,11 +96,14 @@ def sanitize_text(db: Session, user_scope: str, text: str) -> tuple[str, int]:
     replacements = 0
 
     for rule in rules:
-        regex = (
-            re.compile(re.escape(rule.pattern))
-            if rule.rule_type == "literal"
-            else re.compile(rule.pattern)
-        )
+        try:
+            regex = (
+                re.compile(re.escape(rule.pattern))
+                if rule.rule_type == "literal"
+                else re.compile(rule.pattern)
+            )
+        except re.error as exc:
+            raise DesensitizationError(5003, "Invalid regex pattern") from exc
 
         def on_match(matched: str) -> None:
             nonlocal replacements

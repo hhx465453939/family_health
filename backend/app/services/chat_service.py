@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import zipfile
 from datetime import datetime, timezone
 from io import BytesIO
@@ -206,6 +207,34 @@ def _write_file(path: Path, data: bytes) -> None:
     path.write_bytes(data)
 
 
+def _decode_text_with_fallback(file_bytes: bytes) -> str:
+    for encoding in ("utf-8", "utf-8-sig", "gb18030", "latin-1"):
+        try:
+            return file_bytes.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return file_bytes.decode("utf-8", errors="ignore")
+
+
+def _strip_xml_tags(text: str) -> str:
+    cleaned = re.sub(r"<[^>]+>", " ", text)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def _extract_attachment_text(file_name: str, file_bytes: bytes) -> str:
+    suffix = Path(file_name).suffix.lower()
+    if suffix in {".txt", ".md", ".markdown", ".json", ".csv", ".log", ".xml", ".yaml", ".yml"}:
+        return _decode_text_with_fallback(file_bytes)
+
+    if suffix == ".docx":
+        with zipfile.ZipFile(BytesIO(file_bytes)) as zf:
+            xml_payload = zf.read("word/document.xml").decode("utf-8", errors="ignore")
+            return _strip_xml_tags(xml_payload)
+
+    # Fallback: treat as text-like binary with tolerant decoding.
+    return _decode_text_with_fallback(file_bytes)
+
+
 def add_attachment(
     db: Session,
     session_id: str,
@@ -236,7 +265,7 @@ def add_attachment(
     _write_file(raw_path, file_bytes)
 
     try:
-        raw_text = file_bytes.decode("utf-8", errors="ignore")
+        raw_text = _extract_attachment_text(file_name, file_bytes)
         sanitized_text, _ = sanitize_text(db, user_scope=user_id, text=raw_text)
         sanitized_path.parent.mkdir(parents=True, exist_ok=True)
         sanitized_path.write_text(sanitized_text, encoding="utf-8")

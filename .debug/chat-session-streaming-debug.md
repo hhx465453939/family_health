@@ -57,3 +57,25 @@
   - Fixed AuthPage mojibake by rewriting page text and locale wiring.
 - Verification:
   - npm run build (frontend) passed.
+
+### [2026-02-18 20:35] Attachment upload 400 parse-failed on chat
+- Issue
+  - Uploading document file to `/api/v1/chat/sessions/{id}/attachments` returned `400 Attachment parse failed`.
+- Root cause
+  - Attachment parser only did naive UTF-8 decode, no dedicated `docx` extraction path.
+  - Desensitization regex rules were not validated; invalid regex could throw runtime `re.error` and be mapped into generic parse-failed.
+- Solution
+  - Added robust extraction pipeline in `chat_service`:
+    - text decode fallback (`utf-8`/`utf-8-sig`/`gb18030`/`latin-1`)
+    - `docx` extraction from `word/document.xml` with XML tag stripping.
+  - Added regex validation in desensitization service:
+    - validate regex at rule creation
+    - guard regex compile during sanitize with explicit `DesensitizationError(5003)`.
+  - Added regression tests:
+    - upload minimal `docx` attachment succeeds
+    - invalid regex rule is rejected with code `5003`.
+- Verification
+  - `uv run ruff check .` passed
+  - `uv run pytest` passed (13 passed)
+- Impact
+  - Backward compatible; attachment parsing is more tolerant and errors are now deterministic for invalid regex rules.
