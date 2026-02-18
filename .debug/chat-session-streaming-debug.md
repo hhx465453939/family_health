@@ -79,3 +79,40 @@
   - `uv run pytest` passed (13 passed)
 - Impact
   - Backward compatible; attachment parsing is more tolerant and errors are now deterministic for invalid regex rules.
+
+### [2026-02-18 21:40] 附件上传 400 与知识库管理增强
+- 问题描述
+  - 部分文件在 Chat 上传仍返回 400。
+  - 知识库缺少删除/配置管理/文档上传/策略权重等基础能力。
+- 根因定位
+  - Windows 文件名非法字符导致写盘路径异常，触发 `Attachment parse failed`。
+  - 知识库 API 仅覆盖 create/list/build，未覆盖管理与策略配置。
+- 解决方案
+  - 新增通用文件文本提取与安全文件名模块：`file_text_extract.py`。
+  - Chat 附件写盘改用 `safe_storage_name`，并返回更具体错误类型。
+  - 新增知识库能力：
+    - KB 配置更新、KB 删除、文档上传入库、文档删除、全局默认参数查询。
+    - 每 KB 专用模型与策略：embedding/reranker/semantic model、strategy/weights。
+    - 检索支持 keyword/semantic/hybrid，带权重融合评分。
+  - 前端知识库中心重构：图标化管理、配置表单、上传+文本构建、策略检索。
+- 验证
+  - `uv run ruff check .` 通过
+  - `uv run pytest` 通过（15 passed）
+  - `npm run build` 通过
+
+### [2026-02-18 22:05] Chat 附件上传仍报 OperationalError（二次定位）
+- 问题描述
+  - 前端仍提示 `Attachment parse failed: OperationalError`。
+- 根因定位
+  - 真实旧库结构中：`desensitization_rules` 与 `pii_mapping_vault` 缺少 `user_id`。
+  - 附件上传会进入脱敏链路：查询 `desensitization_rules.user_id`、写入 `pii_mapping_vault.user_id`，直接触发 SQLite `OperationalError`。
+- 解决方案
+  - 扩展 SQLite 启动兼容迁移：
+    - `desensitization_rules.user_id`
+    - `pii_mapping_vault.user_id`
+  - 本地执行迁移并验证列存在。
+  - 新增迁移回归测试覆盖两张表补列。
+- 验证
+  - 现库校验：`rule user_id True`、`pii user_id True`
+  - `uv run ruff check .` 通过
+  - `uv run pytest tests/test_schema_migration.py tests/test_attachment_upload_parsing.py` 通过

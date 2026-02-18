@@ -26,6 +26,10 @@ def retrieval_query_api(
             user_id=user.id,
             query=payload.query,
             top_k=payload.top_k,
+            strategy=payload.strategy,
+            keyword_weight=payload.keyword_weight,
+            semantic_weight=payload.semantic_weight,
+            rerank_weight=payload.rerank_weight,
         )
     except KbError as exc:
         return error(exc.code, exc.message, trace_id, status_code=400)

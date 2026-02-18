@@ -91,3 +91,12 @@
 
 ## 技术债务记录
 - ESLint 使用 v8 兼容配置，后续可升级到 flat config（eslint v9+）。
+
+### [2026-02-18 21:45] 知识库中心体验升级（管理/上传/策略）
+- 变更摘要
+  - 重写 `KnowledgeBaseCenter`：新增知识库图标化管理、配置保存、文档上传构建、文档删除、策略+权重检索调参。
+  - API 客户端新增 KB defaults/update/delete/upload-doc/delete-doc。
+- 验证
+  - `npm run build` 通过
+- 文档
+  - 更新 `docs/USER_GUIDE.md` 知识库使用章节

@@ -10,6 +10,18 @@ _SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
     "llm_runtime_profiles": {"user_id": "VARCHAR(36)"},
     "mcp_servers": {"user_id": "VARCHAR(36)"},
     "agent_mcp_bindings": {"user_id": "VARCHAR(36)"},
+    "desensitization_rules": {"user_id": "VARCHAR(36)"},
+    "pii_mapping_vault": {"user_id": "VARCHAR(36)"},
+    "knowledge_bases": {
+        "user_id": "VARCHAR(36)",
+        "semantic_model_id": "VARCHAR(36)",
+        "use_global_defaults": "BOOLEAN",
+        "retrieval_strategy": "VARCHAR(20)",
+        "keyword_weight": "FLOAT",
+        "semantic_weight": "FLOAT",
+        "rerank_weight": "FLOAT",
+        "strategy_params_json": "TEXT",
+    },
     "chat_sessions": {
         "role_id": "VARCHAR(120)",
         "background_prompt": "TEXT",
@@ -38,6 +50,26 @@ def _add_missing_columns(
         )
         if table_name == "chat_sessions" and column_name == "show_reasoning":
             conn.exec_driver_sql("UPDATE chat_sessions SET show_reasoning = 1 WHERE show_reasoning IS NULL")
+        if table_name == "knowledge_bases" and column_name == "use_global_defaults":
+            conn.exec_driver_sql(
+                "UPDATE knowledge_bases SET use_global_defaults = 1 WHERE use_global_defaults IS NULL"
+            )
+        if table_name == "knowledge_bases" and column_name == "retrieval_strategy":
+            conn.exec_driver_sql(
+                "UPDATE knowledge_bases SET retrieval_strategy = 'hybrid' WHERE retrieval_strategy IS NULL"
+            )
+        if table_name == "knowledge_bases" and column_name == "keyword_weight":
+            conn.exec_driver_sql(
+                "UPDATE knowledge_bases SET keyword_weight = 0.5 WHERE keyword_weight IS NULL"
+            )
+        if table_name == "knowledge_bases" and column_name == "semantic_weight":
+            conn.exec_driver_sql(
+                "UPDATE knowledge_bases SET semantic_weight = 0.5 WHERE semantic_weight IS NULL"
+            )
+        if table_name == "knowledge_bases" and column_name == "rerank_weight":
+            conn.exec_driver_sql(
+                "UPDATE knowledge_bases SET rerank_weight = 0 WHERE rerank_weight IS NULL"
+            )
         if column_name.endswith("_id") or column_name == "user_id":
             conn.exec_driver_sql(
                 f"CREATE INDEX IF NOT EXISTS idx_{table_name}_{column_name} ON {table_name} ({column_name})"

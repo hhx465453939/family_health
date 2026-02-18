@@ -101,7 +101,23 @@ export type KnowledgeBase = {
   rerank_top_n: number;
   embedding_model_id: string | null;
   reranker_model_id: string | null;
+  semantic_model_id: string | null;
+  use_global_defaults: boolean;
+  retrieval_strategy: "keyword" | "semantic" | "hybrid";
+  keyword_weight: number;
+  semantic_weight: number;
+  rerank_weight: number;
+  strategy_params: Record<string, unknown>;
   status: string;
+  updated_at: string;
+};
+
+export type KbDocument = {
+  id: string;
+  status: string;
+  source_type: string;
+  error_message: string | null;
+  masked_path: string | null;
   updated_at: string;
 };
 

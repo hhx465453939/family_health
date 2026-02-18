@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import zipfile
 from datetime import datetime, timezone
 from io import BytesIO
@@ -16,6 +15,7 @@ from app.models.chat_attachment import ChatAttachment
 from app.models.chat_message import ChatMessage
 from app.models.chat_session import ChatSession
 from app.services.desensitization_service import DesensitizationError, sanitize_text
+from app.services.file_text_extract import extract_text_from_file, safe_storage_name
 
 
 class ChatError(Exception):
@@ -207,34 +207,6 @@ def _write_file(path: Path, data: bytes) -> None:
     path.write_bytes(data)
 
 
-def _decode_text_with_fallback(file_bytes: bytes) -> str:
-    for encoding in ("utf-8", "utf-8-sig", "gb18030", "latin-1"):
-        try:
-            return file_bytes.decode(encoding)
-        except UnicodeDecodeError:
-            continue
-    return file_bytes.decode("utf-8", errors="ignore")
-
-
-def _strip_xml_tags(text: str) -> str:
-    cleaned = re.sub(r"<[^>]+>", " ", text)
-    return re.sub(r"\s+", " ", cleaned).strip()
-
-
-def _extract_attachment_text(file_name: str, file_bytes: bytes) -> str:
-    suffix = Path(file_name).suffix.lower()
-    if suffix in {".txt", ".md", ".markdown", ".json", ".csv", ".log", ".xml", ".yaml", ".yml"}:
-        return _decode_text_with_fallback(file_bytes)
-
-    if suffix == ".docx":
-        with zipfile.ZipFile(BytesIO(file_bytes)) as zf:
-            xml_payload = zf.read("word/document.xml").decode("utf-8", errors="ignore")
-            return _strip_xml_tags(xml_payload)
-
-    # Fallback: treat as text-like binary with tolerant decoding.
-    return _decode_text_with_fallback(file_bytes)
-
-
 def add_attachment(
     db: Session,
     session_id: str,
@@ -245,12 +217,13 @@ def add_attachment(
     _session_for_user(db, session_id, user_id)
 
     attachment_id = str(uuid4())
-    raw_path = raw_vault_root() / "chat_attachments" / session_id / f"{attachment_id}_{file_name}"
+    safe_name = safe_storage_name(file_name, fallback="attachment.txt")
+    raw_path = raw_vault_root() / "chat_attachments" / session_id / f"{attachment_id}_{safe_name}"
     sanitized_path = (
         sanitized_workspace_root()
         / "chat_attachments"
         / session_id
-        / f"{attachment_id}_{file_name}.md"
+        / f"{attachment_id}_{safe_name}.md"
     )
 
     row = ChatAttachment(
@@ -265,7 +238,7 @@ def add_attachment(
     _write_file(raw_path, file_bytes)
 
     try:
-        raw_text = _extract_attachment_text(file_name, file_bytes)
+        raw_text = extract_text_from_file(file_name, file_bytes)
         sanitized_text, _ = sanitize_text(db, user_scope=user_id, text=raw_text)
         sanitized_path.parent.mkdir(parents=True, exist_ok=True)
         sanitized_path.write_text(sanitized_text, encoding="utf-8")
@@ -277,9 +250,9 @@ def add_attachment(
         raise ChatError(exc.code, exc.message) from exc
     except Exception as exc:  # noqa: BLE001
         row.parse_status = "error"
-        row.error_message = "Attachment parse failed"
+        row.error_message = f"Attachment parse failed: {type(exc).__name__}"
         db.commit()
-        raise ChatError(4002, "Attachment parse failed") from exc
+        raise ChatError(4002, f"Attachment parse failed: {type(exc).__name__}") from exc
 
     db.commit()
     db.refresh(row)

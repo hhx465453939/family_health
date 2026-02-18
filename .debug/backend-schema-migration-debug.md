@@ -52,3 +52,23 @@
 
 ## 技术债务记录
 - 当前迁移仅补列，不处理旧数据 user_id 归属映射。
+
+### [2026-02-18 21:05] 知识库中心 500：knowledge_bases.user_id 缺失
+- 问题描述
+  - `GET/POST /api/v1/knowledge-bases` 500，SQLite 报错 `no such column: knowledge_bases.user_id`。
+- 根因定位
+  - 代码已按账号隔离查询 `KnowledgeBase.user_id`，但 SQLite 启动兼容迁移遗漏了 `knowledge_bases.user_id` 补列规则。
+- 解决方案
+  - 在 `run_startup_migrations` 的 SQLite 兼容列配置中补充：`knowledge_bases.user_id`。
+  - 新增回归测试，确保旧库结构可在启动迁移后自动补齐该列。
+  - 更新部署文档说明该场景。
+- 代码变更（文件/函数）
+  - `backend/app/core/schema_migration.py`
+  - `backend/tests/test_schema_migration.py`
+  - `doc/DEPLOYMENT.md`
+- 验证结果
+  - `uv run ruff check .` 通过
+  - `uv run pytest` 通过（14 passed）
+  - 一次性本地 DB 迁移验证：`PRAGMA table_info(knowledge_bases)` 包含 `user_id`（输出 `True`）
+- 影响评估
+  - 仅启动迁移逻辑增强，API 契约不变；可兼容已有 SQLite 数据文件。

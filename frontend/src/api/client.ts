@@ -313,20 +313,87 @@ export const api = {
       top_k: number;
       rerank_top_n: number;
       member_scope: string;
+      embedding_model_id?: string | null;
+      reranker_model_id?: string | null;
+      semantic_model_id?: string | null;
+      use_global_defaults?: boolean;
+      retrieval_strategy?: "keyword" | "semantic" | "hybrid";
+      keyword_weight?: number;
+      semantic_weight?: number;
+      rerank_weight?: number;
+      strategy_params?: Record<string, unknown> | null;
     },
     token: string,
   ): Promise<KnowledgeBase> => request("/knowledge-bases", { method: "POST", body: JSON.stringify(payload) }, token),
   listKb: (token: string): Promise<{ items: KnowledgeBase[] }> => request("/knowledge-bases", {}, token),
+  getKbDefaults: (
+    token: string,
+  ): Promise<{
+    embedding_model_id: string | null;
+    reranker_model_id: string | null;
+    semantic_model_id: string | null;
+    retrieval_strategy: "keyword" | "semantic" | "hybrid";
+    keyword_weight: number;
+    semantic_weight: number;
+    rerank_weight: number;
+  }> => request("/knowledge-bases/defaults", {}, token),
+  updateKb: (
+    kbId: string,
+    payload: Partial<{
+      name: string;
+      chunk_size: number;
+      chunk_overlap: number;
+      top_k: number;
+      rerank_top_n: number;
+      embedding_model_id: string | null;
+      reranker_model_id: string | null;
+      semantic_model_id: string | null;
+      use_global_defaults: boolean;
+      retrieval_strategy: "keyword" | "semantic" | "hybrid";
+      keyword_weight: number;
+      semantic_weight: number;
+      rerank_weight: number;
+      strategy_params: Record<string, unknown> | null;
+    }>,
+    token: string,
+  ): Promise<KnowledgeBase> =>
+    request(`/knowledge-bases/${kbId}`, { method: "PATCH", body: JSON.stringify(payload) }, token),
+  deleteKb: (kbId: string, token: string): Promise<{ deleted: boolean }> =>
+    request(`/knowledge-bases/${kbId}`, { method: "DELETE" }, token),
   buildKb: (
     kbId: string,
     documents: Array<{ title: string; content: string }>,
     token: string,
   ): Promise<{ documents: number; chunks: number; status: string }> =>
     request(`/knowledge-bases/${kbId}/build`, { method: "POST", body: JSON.stringify({ documents }) }, token),
+  uploadKbDocument: async (kbId: string, file: File, token: string): Promise<{ document_id: string; chunks: number; status: string }> => {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch(`${API_PREFIX}/knowledge-bases/${kbId}/documents/upload`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    const body = (await response.json()) as ApiEnvelope<{ document_id: string; chunks: number; status: string }>;
+    if (!response.ok || body.code !== 0) {
+      throw new ApiError(body.message, body.code ?? response.status, body.trace_id ?? "unknown");
+    }
+    return body.data;
+  },
+  deleteKbDocument: (kbId: string, docId: string, token: string): Promise<{ deleted: boolean }> =>
+    request(`/knowledge-bases/${kbId}/documents/${docId}`, { method: "DELETE" }, token),
   listKbDocuments: (kbId: string, token: string): Promise<{ items: Array<Record<string, unknown>>; stats: Record<string, number> }> =>
     request(`/knowledge-bases/${kbId}/documents`, {}, token),
   retrievalQuery: (
-    payload: { kb_id: string; query: string; top_k: number },
+    payload: {
+      kb_id: string;
+      query: string;
+      top_k: number;
+      strategy?: "keyword" | "semantic" | "hybrid";
+      keyword_weight?: number;
+      semantic_weight?: number;
+      rerank_weight?: number;
+    },
     token: string,
   ): Promise<{ items: Array<Record<string, unknown>> }> =>
     request("/retrieval/query", { method: "POST", body: JSON.stringify(payload) }, token),

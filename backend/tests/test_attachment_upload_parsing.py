@@ -67,3 +67,18 @@ def test_create_invalid_regex_rule_rejected(client: TestClient):
     )
     assert rule_resp.status_code == 400
     assert rule_resp.json()["code"] == 5003
+
+
+def test_upload_attachment_with_invalid_windows_filename(client: TestClient):
+    token = _bootstrap_and_login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    session_resp = client.post("/api/v1/chat/sessions", json={"title": "name-safe"}, headers=headers)
+    assert session_resp.status_code == 200
+    session_id = session_resp.json()["data"]["id"]
+
+    upload_resp = client.post(
+        f"/api/v1/chat/sessions/{session_id}/attachments",
+        headers=headers,
+        files={"file": ("bad:name?.txt", "safe content".encode("utf-8"), "text/plain")},
+    )
+    assert upload_resp.status_code == 200
