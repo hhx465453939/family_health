@@ -84,3 +84,18 @@
 - 验证
   - `uv run ruff check .` 通过
   - `uv run pytest tests/test_phase1_phase2_flow.py` 通过
+
+### [2026-02-19 00:18] SiliconFlow embedding 分类补强（BAAI/bge-m3）
+- 问题
+  - 刷新模型后部分 embedding（如 `BAAI/bge-m3`）未进入 Embedding 列表。
+- 根因
+  - OpenAI 兼容发现逻辑仅按模型名中是否包含 `embedding` 进行分类；`bge-m3` 被误判为 llm。
+- 修复
+  - 新增 `row` 元数据优先分类（`model_type/type/task_type/category/capabilities`）。
+  - 扩展名称兜底规则，覆盖 `bge-m3`、`bge-*`、`e5-*`、`gte-*`、`m3e-*`、`jina-embeddings` 等 embedding 命名。
+  - 补充 reranker 命名识别（`bge-reranker` / `bce-reranker`）。
+- 影响文件
+  - `backend/app/services/model_registry_service.py`
+- 验证
+  - `uv run ruff check .` 通过
+  - `uv run pytest tests/test_phase1_phase2_flow.py` 通过

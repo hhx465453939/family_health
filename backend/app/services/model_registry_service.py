@@ -100,11 +100,50 @@ def _normalize_base_url(base_url: str) -> str:
 
 def _model_type_from_name(name: str) -> str:
     lower = name.lower()
-    if "embedding" in lower or lower.startswith("text-embedding"):
+    if any(
+        token in lower
+        for token in (
+            "embedding",
+            "embed",
+            "text-embedding",
+            "bge-m3",
+            "/bge",
+            "bge-",
+            "e5-",
+            "gte-",
+            "m3e-",
+            "jina-embeddings",
+        )
+    ):
         return "embedding"
-    if "rerank" in lower or "reranker" in lower:
+    if any(token in lower for token in ("rerank", "reranker", "bge-reranker", "bce-reranker")):
         return "reranker"
     return "llm"
+
+
+def _model_type_from_row(row: dict, model_name: str) -> str:
+    # Prefer explicit provider metadata when available.
+    for key in ("model_type", "type", "task_type", "category"):
+        value = str(row.get(key) or "").strip().lower()
+        if not value:
+            continue
+        if any(token in value for token in ("embedding", "embed")):
+            return "embedding"
+        if "rerank" in value:
+            return "reranker"
+        if any(token in value for token in ("chat", "generation", "llm", "text")):
+            return "llm"
+
+    for key in ("capabilities", "ability", "features"):
+        value = row.get(key)
+        if isinstance(value, dict):
+            merged = " ".join(str(v).lower() for v in value.values())
+            if "rerank" in merged:
+                return "reranker"
+            if any(token in merged for token in ("embedding", "embed")):
+                return "embedding"
+
+    return _model_type_from_name(model_name)
 
 
 def _openai_models_url(base_url: str) -> str:
@@ -157,7 +196,7 @@ def _discover_openai_compatible_models(base_url: str, api_key: str) -> list[tupl
         model_name = str(row.get("id") or "").strip()
         if not model_name:
             continue
-        model_type = _model_type_from_name(model_name)
+        model_type = _model_type_from_row(row, model_name)
         capabilities = {}
         lower_name = model_name.lower()
         if model_type == "llm":
@@ -480,3 +519,15 @@ def list_runtime_profiles(db: Session, user_id: str) -> list[LlmRuntimeProfile]:
         .order_by(LlmRuntimeProfile.updated_at.desc())
         .all()
     )
+
+
+def delete_runtime_profile(db: Session, user_id: str, profile_id: str) -> None:
+    profile = (
+        db.query(LlmRuntimeProfile)
+        .filter(LlmRuntimeProfile.id == profile_id, LlmRuntimeProfile.user_id == user_id)
+        .first()
+    )
+    if not profile:
+        raise ModelRegistryError(3003, "Runtime profile not found")
+    db.delete(profile)
+    db.commit()
