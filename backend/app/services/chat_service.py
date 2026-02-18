@@ -186,9 +186,22 @@ def delete_session(db: Session, session_id: str, user_id: str) -> None:
     db.commit()
 
 
-def add_message(db: Session, session_id: str, user_id: str, role: str, content: str) -> ChatMessage:
+def add_message(
+    db: Session,
+    session_id: str,
+    user_id: str,
+    role: str,
+    content: str,
+    reasoning_content: str | None = None,
+) -> ChatMessage:
     _session_for_user(db, session_id, user_id)
-    msg = ChatMessage(id=str(uuid4()), session_id=session_id, role=role, content=content)
+    msg = ChatMessage(
+        id=str(uuid4()),
+        session_id=session_id,
+        role=role,
+        content=content,
+        reasoning_content=reasoning_content,
+    )
     db.add(msg)
     session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
     if session:
@@ -355,6 +368,7 @@ def copy_session(db: Session, session_id: str, user_id: str, title_prefix: str =
                 session_id=copied.id,
                 role=msg.role,
                 content=msg.content,
+                reasoning_content=msg.reasoning_content,
             )
         )
     db.commit()
@@ -362,7 +376,12 @@ def copy_session(db: Session, session_id: str, user_id: str, title_prefix: str =
     return copied
 
 
-def export_session_payload(db: Session, session_id: str, user_id: str) -> dict:
+def export_session_payload(
+    db: Session,
+    session_id: str,
+    user_id: str,
+    include_reasoning: bool = True,
+) -> dict:
     session = _session_for_user(db, session_id, user_id)
     messages = list_messages(db, session_id=session_id, user_id=user_id)
     return {
@@ -372,6 +391,7 @@ def export_session_payload(db: Session, session_id: str, user_id: str) -> dict:
                 "id": m.id,
                 "role": m.role,
                 "content": m.content,
+                "reasoning_content": m.reasoning_content if include_reasoning else None,
                 "created_at": m.created_at.isoformat(),
             }
             for m in messages
@@ -396,16 +416,30 @@ def export_session_markdown(payload: dict) -> str:
     for msg in payload["messages"]:
         lines.append(f"### {msg['role']} ({msg['created_at']})")
         lines.append(msg["content"])
+        reasoning = msg.get("reasoning_content")
+        if reasoning:
+            lines.append("")
+            lines.append("#### Reasoning")
+            lines.append(reasoning)
         lines.append("")
     return "\n".join(lines)
 
 
-def bulk_export_sessions_zip(db: Session, user_id: str, session_ids: list[str]) -> bytes:
+def bulk_export_sessions_zip(
+    db: Session,
+    user_id: str,
+    session_ids: list[str],
+    include_reasoning: bool = True,
+) -> bytes:
     buf = BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for session_id in session_ids:
-            payload = export_session_payload(db, session_id=session_id, user_id=user_id)
-            zf.writestr(f"{session_id}.json", json.dumps(payload, ensure_ascii=False, indent=2))
+            payload = export_session_payload(
+                db,
+                session_id=session_id,
+                user_id=user_id,
+                include_reasoning=include_reasoning,
+            )
             zf.writestr(f"{session_id}.md", export_session_markdown(payload))
     return buf.getvalue()
 

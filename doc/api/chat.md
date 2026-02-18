@@ -7,7 +7,7 @@
 - `DELETE /api/v1/chat/sessions/{id}`（软删除）
 - `POST /api/v1/chat/sessions/{id}/copy`
 - `POST /api/v1/chat/sessions/{id}/branch`
-- `GET /api/v1/chat/sessions/{id}/export?fmt=json|md`
+- `GET /api/v1/chat/sessions/{id}/export?fmt=md&include_reasoning=true|false`
 - `POST /api/v1/chat/sessions/bulk-export`
 - `POST /api/v1/chat/sessions/bulk-delete`
 
@@ -21,6 +21,9 @@
 ## 2) 消息管理
 - `POST /api/v1/chat/sessions/{id}/messages`
 - `GET /api/v1/chat/sessions/{id}/messages`
+
+消息字段补充：
+- `reasoning_content`（assistant 思维链，按会话策略可为空）
 
 ## 3) 附件上传
 - `POST /api/v1/chat/sessions/{id}/attachments`（multipart）

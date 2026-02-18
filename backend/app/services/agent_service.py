@@ -19,6 +19,7 @@ from app.services.chat_service import (
     get_session_default_mcp_ids,
     get_session_for_user,
 )
+from app.services.knowledge_base_service import KbError, retrieve_from_kb
 from app.services.mcp_service import get_effective_server_ids, route_tools
 from app.services.role_service import get_role_prompt
 
@@ -73,7 +74,11 @@ def _resolve_model_provider(db, user_id: str, profile: LlmRuntimeProfile) -> tup
     return model, provider
 
 
-def _build_context_suffix(attachment_texts: list[str], mcp_results: list[dict]) -> str:
+def _build_context_suffix(
+    attachment_texts: list[str],
+    mcp_results: list[dict],
+    kb_hits: list[dict],
+) -> str:
     blocks: list[str] = []
     if attachment_texts:
         clipped: list[str] = []
@@ -85,6 +90,16 @@ def _build_context_suffix(attachment_texts: list[str], mcp_results: list[dict]) 
         blocks.append("Sanitized attachment context:\n" + "\n\n".join(clipped))
     if mcp_results:
         blocks.append("MCP tool outputs:\n" + "\n".join(str(item.get("output", "")) for item in mcp_results))
+    if kb_hits:
+        kb_lines: list[str] = []
+        for idx, hit in enumerate(kb_hits, start=1):
+            text = str(hit.get("chunk_text", "")).strip()
+            if len(text) > 800:
+                text = text[:800] + "\n...[truncated]"
+            kb_lines.append(
+                f"[KB Hit {idx}] score={hit.get('score', 0)}\n{text}"
+            )
+        blocks.append("Knowledge base retrieval:\n" + "\n\n".join(kb_lines))
     suffix = "\n\n" + "\n\n".join(blocks) if blocks else ""
     if suffix:
         suffix += (
@@ -284,6 +299,7 @@ def _prepare_context(
     user,
     session_id: str,
     query: str,
+    kb_id: str | None,
     background_prompt: str | None,
     attachments_ids: list[str] | None,
     enabled_mcp_ids: list[str] | None,
@@ -332,8 +348,19 @@ def _prepare_context(
         request_override_ids=enabled_mcp_ids,
     )
     mcp_out = route_tools(db, user_id=user.id, enabled_server_ids=effective_mcp_ids, query=query)
+    kb_hits: list[dict] = []
+    if kb_id:
+        try:
+            kb_hits = retrieve_from_kb(
+                db,
+                kb_id=kb_id,
+                user_id=user.id,
+                query=normalized_query or "(attachment-only mode)",
+            )
+        except KbError as exc:
+            raise ChatError(exc.code, exc.message) from exc
 
-    suffix = _build_context_suffix(attachment_texts, mcp_out["results"])
+    suffix = _build_context_suffix(attachment_texts, mcp_out["results"], kb_hits)
     if trimmed and trimmed[-1]["role"] == "user":
         trimmed[-1] = {"role": "user", "content": trimmed[-1]["content"] + suffix}
 
@@ -343,6 +370,7 @@ def _prepare_context(
         "trimmed": trimmed,
         "attachment_texts": attachment_texts,
         "mcp_out": mcp_out,
+        "kb_hits": kb_hits,
         "effective_mcp_ids": effective_mcp_ids,
         "system_prompt": _effective_system_prompt(session, background_prompt),
         "runtime_profile_id": runtime_profile_id,
@@ -355,6 +383,7 @@ def run_agent_qa(
     user,
     session_id: str,
     query: str,
+    kb_id: str | None,
     background_prompt: str | None,
     attachments_ids: list[str] | None,
     enabled_mcp_ids: list[str] | None,
@@ -365,6 +394,7 @@ def run_agent_qa(
         user,
         session_id,
         query,
+        kb_id,
         background_prompt,
         attachments_ids,
         enabled_mcp_ids,
@@ -429,6 +459,7 @@ def run_agent_qa(
         user_id=user.id,
         role="assistant",
         content=answer,
+        reasoning_content=reasoning_text if include_reasoning else None,
     )
 
     return {
@@ -439,6 +470,7 @@ def run_agent_qa(
         "context": {
             "history_messages": len(ctx["trimmed"]),
             "attachment_chunks": len(ctx["attachment_texts"]),
+            "kb_hits": len(ctx["kb_hits"]),
             "enabled_mcp_ids": ctx["effective_mcp_ids"],
         },
         "mcp_results": ctx["mcp_out"]["results"],
@@ -455,6 +487,7 @@ def stream_agent_qa(
     user,
     session_id: str,
     query: str,
+    kb_id: str | None,
     background_prompt: str | None,
     attachments_ids: list[str] | None,
     enabled_mcp_ids: list[str] | None,
@@ -465,6 +498,7 @@ def stream_agent_qa(
         user,
         session_id,
         query,
+        kb_id,
         background_prompt,
         attachments_ids,
         enabled_mcp_ids,
@@ -581,6 +615,7 @@ def stream_agent_qa(
         user_id=user.id,
         role="assistant",
         content=final_answer,
+        reasoning_content="".join(reasoning_buf) if include_reasoning else None,
     )
 
     yield _sse_event(

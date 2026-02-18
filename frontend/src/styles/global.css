@@ -322,28 +322,65 @@ button.ghost {
 .icon-actions {
   display: inline-flex;
   gap: 4px;
+  opacity: 0.45;
+  transition: opacity 140ms ease;
 }
 
 .icon-btn {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 8px;
   padding: 0;
   display: grid;
   place-items: center;
   background: transparent;
   color: var(--text-muted);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
 .icon-btn:hover {
   background: rgba(31, 138, 120, 0.15);
   color: var(--accent-strong);
+  border-color: var(--line);
 }
 
 .icon-btn.danger:hover {
   background: rgba(162, 57, 57, 0.16);
   color: var(--danger);
+}
+
+.session-row:hover .icon-actions,
+.bubble:hover .icon-actions,
+.composer:hover .icon-actions {
+  opacity: 1;
+}
+
+.icon-menu {
+  position: relative;
+}
+
+.menu-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 8;
+  min-width: 220px;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--card-shadow);
+  display: grid;
+  gap: 8px;
+}
+
+.menu-popover .actions {
+  justify-content: flex-end;
+}
+
+.menu-popover .ghost {
+  padding: 6px 10px;
 }
 
 .inline-check {

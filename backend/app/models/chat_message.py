@@ -15,6 +15,7 @@ class ChatMessage(Base):
     )
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    reasoning_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     tool_calls_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     citations_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

@@ -198,10 +198,13 @@ export const api = {
     request(`/chat/sessions/${sessionId}/copy`, { method: "POST" }, token),
   branchChatSession: (sessionId: string, token: string): Promise<ChatSession> =>
     request(`/chat/sessions/${sessionId}/branch`, { method: "POST" }, token),
-  exportChatSession: async (sessionId: string, format: "json" | "md", token: string): Promise<Blob> => {
-    const response = await fetch(`${API_PREFIX}/chat/sessions/${sessionId}/export?fmt=${format}`, {
+  exportChatSession: async (sessionId: string, format: "md", includeReasoning: boolean, token: string): Promise<Blob> => {
+    const response = await fetch(
+      `${API_PREFIX}/chat/sessions/${sessionId}/export?fmt=${format}&include_reasoning=${includeReasoning ? "true" : "false"}`,
+      {
       headers: { Authorization: `Bearer ${token}` },
-    });
+      },
+    );
     if (!response.ok) {
       throw new Error(`Export failed: ${response.status}`);
     }
@@ -249,6 +252,7 @@ export const api = {
     payload: {
       session_id: string;
       query?: string;
+      kb_id?: string | null;
       background_prompt?: string;
       enabled_mcp_ids?: string[];
       runtime_profile_id?: string | null;
@@ -265,6 +269,7 @@ export const api = {
     payload: {
       session_id: string;
       query?: string;
+      kb_id?: string | null;
       background_prompt?: string;
       enabled_mcp_ids?: string[];
       runtime_profile_id?: string | null;

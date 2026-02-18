@@ -1,5 +1,3 @@
-import json
-
 from fastapi import APIRouter, Depends, File, Request, Response, UploadFile
 from sqlalchemy.orm import Session
 
@@ -163,26 +161,28 @@ def branch_session_api(
 def export_session_api(
     session_id: str,
     request: Request,
-    fmt: str = "json",
+    fmt: str = "md",
+    include_reasoning: bool = True,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
     trace_id = trace_id_from_request(request)
     try:
-        payload = export_session_payload(db, session_id=session_id, user_id=user.id)
+        payload = export_session_payload(
+            db,
+            session_id=session_id,
+            user_id=user.id,
+            include_reasoning=include_reasoning,
+        )
     except ChatError as exc:
         return error(exc.code, exc.message, trace_id, status_code=404)
 
-    if fmt == "md":
-        return Response(
-            content=export_session_markdown(payload),
-            media_type="text/markdown; charset=utf-8",
-            headers={"Content-Disposition": f'attachment; filename="{session_id}.md"'},
-        )
+    if fmt != "md":
+        return error(4007, "Unsupported export format", trace_id, status_code=400)
     return Response(
-        content=json.dumps(payload, ensure_ascii=False, indent=2),
-        media_type="application/json; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{session_id}.json"'},
+        content=export_session_markdown(payload),
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{session_id}.md"'},
     )
 
 
@@ -195,7 +195,12 @@ def bulk_export_session_api(
 ):
     if not payload.session_ids:
         return error(4006, "No session ids provided", trace_id_from_request(request), status_code=400)
-    zip_bytes = bulk_export_sessions_zip(db, user_id=user.id, session_ids=payload.session_ids)
+    zip_bytes = bulk_export_sessions_zip(
+        db,
+        user_id=user.id,
+        session_ids=payload.session_ids,
+        include_reasoning=True,
+    )
     return Response(
         content=zip_bytes,
         media_type="application/zip",
@@ -256,6 +261,7 @@ def list_message_api(
                     "id": row.id,
                     "role": row.role,
                     "content": row.content,
+                    "reasoning_content": row.reasoning_content,
                     "created_at": row.created_at.isoformat(),
                 }
                 for row in rows

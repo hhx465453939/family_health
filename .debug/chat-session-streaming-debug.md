@@ -133,3 +133,28 @@
   - `uv run ruff check .` passed
   - `uv run pytest` passed (17 passed)
   - `npm run build` passed
+
+### [2026-02-18 23:45] Session export UX + KB select + action hierarchy polish
+- Scope
+  - Chat session export flow, QA request payload, backend export/reasoning persistence, chat button visual hierarchy.
+- Changes
+  - Removed session JSON export path from UI flow; session export now uses one popover with:
+    - format choice: Markdown / PDF(print)
+    - include reasoning toggle
+  - Added `kb_id` support end-to-end for QA:
+    - `AgentQaRequest` + API client payload + ChatCenter chatbox KB picker
+    - agent context now merges KB retrieval snippets into prompt suffix.
+  - Persisted assistant reasoning into DB:
+    - new `chat_messages.reasoning_content` column
+    - startup SQLite migration auto-adds missing column
+    - non-stream and stream both save reasoning when enabled.
+  - Export behavior update:
+    - `/chat/sessions/{id}/export` now supports markdown export with `include_reasoning` query switch
+    - bulk export zip now outputs markdown only (no json payload files).
+  - UI refinement (no feature removal):
+    - icon buttons smaller and quieter by default
+    - session/message/composer icon actions become prominent on hover
+    - compact export popover style for session-row actions.
+- Checkfix
+  - `uv run pytest tests/test_schema_migration.py tests/test_attachment_upload_parsing.py` passed
+  - `npm run build` passed

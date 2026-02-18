@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api, ApiError } from "../api/client";
-import type { AgentRole, ChatMessage, ChatSession, McpServer, ModelCatalog, RuntimeProfile } from "../api/types";
+import type { AgentRole, ChatMessage, ChatSession, KnowledgeBase, McpServer, ModelCatalog, RuntimeProfile } from "../api/types";
 
 type Locale = "zh" | "en";
 type StreamEvent = { type: string; delta?: string; assistant_answer?: string; reasoning_content?: string; message?: string; assistant_message_id?: string };
@@ -51,7 +51,11 @@ const TEXT = {
     copyLabel: "复制",
     branchLabel: "分支",
     exportMd: "导出 Markdown",
-    exportJson: "导出 JSON",
+    exportPdf: "导出 PDF",
+    exportSession: "导出会话",
+    includeReasoning: "保留思维链",
+    kb: "知识库",
+    noKb: "不使用知识库",
     deleteLabel: "删除",
     share: "分享",
     selectAll: "全选",
@@ -109,7 +113,11 @@ const TEXT = {
     copyLabel: "Copy",
     branchLabel: "Branch",
     exportMd: "Export Markdown",
-    exportJson: "Export JSON",
+    exportPdf: "Export PDF",
+    exportSession: "Export Session",
+    includeReasoning: "Include reasoning",
+    kb: "Knowledge Base",
+    noKb: "No knowledge base",
     deleteLabel: "Delete",
     share: "Share",
     selectAll: "Select all",
@@ -161,6 +169,7 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
   const [activeSessionId, setActiveSessionId] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
+  const [kbList, setKbList] = useState<KnowledgeBase[]>([]);
   const [profiles, setProfiles] = useState<RuntimeProfile[]>([]);
   const [catalog, setCatalog] = useState<ModelCatalog[]>([]);
   const [query, setQuery] = useState("");
@@ -182,6 +191,9 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
   const [reasoningByMessageId, setReasoningByMessageId] = useState<Record<string, string>>({});
+  const [selectedKbId, setSelectedKbId] = useState<string>("");
+  const [exportMenuSessionId, setExportMenuSessionId] = useState<string | null>(null);
+  const [exportIncludeReasoning, setExportIncludeReasoning] = useState<boolean>(true);
 
   const answerQueueRef = useRef("");
   const reasoningQueueRef = useRef("");
@@ -240,18 +252,20 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
 
   const loadSessions = async () => {
     try {
-      const [sessionRes, mcpRes, roleRes, profileRes, catalogRes] = await Promise.all([
+      const [sessionRes, mcpRes, roleRes, profileRes, catalogRes, kbRes] = await Promise.all([
         api.listChatSessions(token),
         api.listMcpServers(token),
         api.listAgentRoles(token),
         api.listRuntimeProfiles(token),
         api.listCatalog(token),
+        api.listKb(token),
       ]);
       setSessions(sessionRes.items);
       setMcpServers(mcpRes.items);
       setRoles(roleRes.items);
       setProfiles(profileRes.items);
       setCatalog(catalogRes.items);
+      setKbList(kbRes.items);
       if (!activeSessionId && sessionRes.items.length > 0) {
         setActiveSessionId(sessionRes.items[0].id);
       }
@@ -274,6 +288,14 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
       try {
         const res = await api.listMessages(activeSessionId, token);
         setMessages(res.items);
+        setReasoningByMessageId(
+          res.items.reduce<Record<string, string>>((acc, item) => {
+            if (item.reasoning_content) {
+              acc[item.id] = item.reasoning_content;
+            }
+            return acc;
+          }, {}),
+        );
       } catch (error) {
         setMessage(error instanceof ApiError ? error.message : text.loadMessagesFailed);
       }
@@ -351,15 +373,29 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
     }
   };
 
-  const exportSession = async (sessionId: string, format: "json" | "md") => {
+  const exportSession = async (sessionId: string, format: "md" | "pdf", includeReasoning: boolean) => {
     try {
-      const blob = await api.exportChatSession(sessionId, format, token);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${sessionId}.${format}`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const blob = await api.exportChatSession(sessionId, "md", includeReasoning, token);
+      if (format === "md") {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${sessionId}.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const markdown = await blob.text();
+        const popup = window.open("", "_blank");
+        if (!popup) {
+          setMessage("Popup blocked");
+          return;
+        }
+        popup.document.write(`<html><body>${renderMarkdown(markdown)}</body></html>`);
+        popup.document.close();
+        popup.focus();
+        popup.print();
+      }
+      setExportMenuSessionId(null);
       setMessage(text.exported);
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : text.loadSessionsFailed);
@@ -475,7 +511,13 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
 
     try {
       await api.qaStream(
-        { session_id: activeSessionId, query: normalized, enabled_mcp_ids: selectedMcpIds, attachments_ids: attachmentIds },
+        {
+          session_id: activeSessionId,
+          query: normalized,
+          kb_id: selectedKbId || null,
+          enabled_mcp_ids: selectedMcpIds,
+          attachments_ids: attachmentIds,
+        },
         token,
         (evt: StreamEvent) => {
           if (evt.type === "message") answerQueueRef.current += evt.delta ?? "";
@@ -604,8 +646,21 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
               <div className="icon-actions">
                 <button type="button" className="icon-btn" title={text.copyLabel} onClick={() => void copySession(item.id)}><Icon d="M9 9h10v10H9zM5 5h10v10" /></button>
                 <button type="button" className="icon-btn" title={text.branchLabel} onClick={() => void branchSession(item.id)}><Icon d="M7 3v7a4 4 0 0 0 4 4h6M13 21l4-4-4-4" /></button>
-                <button type="button" className="icon-btn" title={text.exportMd} onClick={() => void exportSession(item.id, "md")}><Icon d="M12 3v12M7 10l5 5 5-5M5 21h14" /></button>
-                <button type="button" className="icon-btn" title={text.exportJson} onClick={() => void exportSession(item.id, "json")}><Icon d="M8 5L4 12l4 7M16 5l4 7-4 7" /></button>
+                <div className="icon-menu">
+                  <button type="button" className="icon-btn" title={text.exportSession} onClick={() => setExportMenuSessionId((prev) => prev === item.id ? null : item.id)}><Icon d="M12 3v12M7 10l5 5 5-5M5 21h14" /></button>
+                  {exportMenuSessionId === item.id && (
+                    <div className="menu-popover">
+                      <label className="inline-check">
+                        <input type="checkbox" checked={exportIncludeReasoning} onChange={(e) => setExportIncludeReasoning(e.target.checked)} />
+                        {text.includeReasoning}
+                      </label>
+                      <div className="actions">
+                        <button type="button" className="ghost" onClick={() => void exportSession(item.id, "md", exportIncludeReasoning)}>{text.exportMd}</button>
+                        <button type="button" className="ghost" onClick={() => void exportSession(item.id, "pdf", exportIncludeReasoning)}>{text.exportPdf}</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <button type="button" className="icon-btn" title={text.share} onClick={() => void shareSession(item.id)}><Icon d="M18 8a3 3 0 1 0-3-3 3 3 0 0 0 3 3zM6 14a3 3 0 1 0 3 3 3 3 0 0 0-3-3zm12 2a3 3 0 1 0 3 3 3 3 0 0 0-3-3zM8.7 14.9l6.6-3.8M8.7 19.1l6.6 3.8" /></button>
                 <button type="button" className="icon-btn danger" title={text.deleteLabel} onClick={() => void deleteSession(item.id)}><Icon d="M3 6h18M8 6V4h8v2M7 6l1 14h8l1-14M10 10v7M14 10v7" /></button>
               </div>
@@ -664,6 +719,12 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
               {mcpServers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           )}
+          <label>{text.kb}
+            <select value={selectedKbId} onChange={(e) => setSelectedKbId(e.target.value)}>
+              <option value="">{text.noKb}</option>
+              {kbList.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </label>
           <textarea value={query} onPaste={(e) => void onPaste(e)} onChange={(e) => setQuery(e.target.value)} placeholder={text.queryPlaceholder} />
           <input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={(e) => void handleUpload(e.target.files?.[0] ?? null)} />
           <button type="button" onClick={sendQa} disabled={!activeSessionId || isStreaming}>{text.send}</button>

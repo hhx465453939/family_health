@@ -34,6 +34,9 @@ _SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
         "content_type": "VARCHAR(120)",
         "is_image": "BOOLEAN",
     },
+    "chat_messages": {
+        "reasoning_content": "TEXT",
+    },
 }
 
 

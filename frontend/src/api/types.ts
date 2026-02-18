@@ -89,6 +89,7 @@ export type ChatMessage = {
   id: string;
   role: string;
   content: string;
+  reasoning_content?: string | null;
   created_at: string;
 };
 
