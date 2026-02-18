@@ -31,6 +31,44 @@ _DEFAULT_DISCOVERY_BY_PROVIDER = {
     ],
 }
 
+_PROVIDER_PRESETS = [
+    {
+        "provider_name": "gemini",
+        "label": "Gemini",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/models",
+    },
+    {
+        "provider_name": "openai",
+        "label": "OpenAI",
+        "base_url": "https://api.openai.com/v1/chat/completions",
+    },
+    {
+        "provider_name": "zhipu-chat",
+        "label": "Zhipu Chat",
+        "base_url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+    },
+    {
+        "provider_name": "zhipu-coding",
+        "label": "Zhipu Coding",
+        "base_url": "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
+    },
+    {
+        "provider_name": "siliconflow",
+        "label": "SiliconFlow",
+        "base_url": "https://api.siliconflow.cn/v1/chat/completions",
+    },
+    {
+        "provider_name": "openrouter",
+        "label": "OpenRouter",
+        "base_url": "https://openrouter.ai/api/v1/chat/completions",
+    },
+    {
+        "provider_name": "custom",
+        "label": "Custom",
+        "base_url": "",
+    },
+]
+
 _ALLOWED_PARAMS_BY_PROVIDER = {
     "gemini": {"temperature", "top_p", "max_tokens", "reasoning_budget"},
     "deepseek": {"temperature", "top_p", "max_tokens", "reasoning_effort"},
@@ -54,6 +92,14 @@ def _clip_params(provider_name: str, params: dict) -> dict:
     return {k: v for k, v in params.items() if k in allowed}
 
 
+def _normalize_base_url(base_url: str) -> str:
+    return base_url.strip().rstrip("/")
+
+
+def list_provider_presets() -> list[dict]:
+    return [item.copy() for item in _PROVIDER_PRESETS]
+
+
 def create_provider(
     db: Session,
     user_id: str,
@@ -62,19 +108,25 @@ def create_provider(
     api_key: str,
     enabled: bool,
 ) -> ModelProvider:
+    cleaned_provider_name = provider_name.strip()
+    cleaned_base_url = _normalize_base_url(base_url)
     duplicated = (
         db.query(ModelProvider)
-        .filter(ModelProvider.user_id == user_id, ModelProvider.provider_name == provider_name)
+        .filter(
+            ModelProvider.user_id == user_id,
+            ModelProvider.provider_name == cleaned_provider_name,
+            ModelProvider.base_url == cleaned_base_url,
+        )
         .first()
     )
     if duplicated:
-        raise ModelRegistryError(3004, "Provider name already exists for current user")
+        raise ModelRegistryError(3004, "Provider already exists for current user")
 
     provider = ModelProvider(
         id=str(uuid4()),
         user_id=user_id,
-        provider_name=provider_name,
-        base_url=base_url,
+        provider_name=cleaned_provider_name,
+        base_url=cleaned_base_url,
         api_key_encrypted=encrypt_text(api_key),
         enabled=enabled,
     )
@@ -108,8 +160,21 @@ def update_provider(
     )
     if not provider:
         raise ModelRegistryError(3001, "Provider not found")
+    next_base_url = _normalize_base_url(base_url) if base_url is not None else provider.base_url
+    duplicated = (
+        db.query(ModelProvider)
+        .filter(
+            ModelProvider.user_id == user_id,
+            ModelProvider.provider_name == provider.provider_name,
+            ModelProvider.base_url == next_base_url,
+            ModelProvider.id != provider_id,
+        )
+        .first()
+    )
+    if duplicated:
+        raise ModelRegistryError(3004, "Provider already exists for current user")
     if base_url is not None:
-        provider.base_url = base_url
+        provider.base_url = next_base_url
     if api_key is not None:
         provider.api_key_encrypted = encrypt_text(api_key)
     if enabled is not None:

@@ -22,6 +22,7 @@ from app.services.model_registry_service import (
     create_provider,
     create_runtime_profile,
     delete_provider,
+    list_provider_presets,
     list_catalog,
     list_providers,
     list_runtime_profiles,
@@ -76,14 +77,17 @@ def create_provider_api(
     user: User = Depends(current_user),
 ):
     trace_id = trace_id_from_request(request)
-    row = create_provider(
-        db,
-        user_id=user.id,
-        provider_name=payload.provider_name,
-        base_url=payload.base_url,
-        api_key=payload.api_key,
-        enabled=payload.enabled,
-    )
+    try:
+        row = create_provider(
+            db,
+            user_id=user.id,
+            provider_name=payload.provider_name,
+            base_url=payload.base_url,
+            api_key=payload.api_key,
+            enabled=payload.enabled,
+        )
+    except ModelRegistryError as exc:
+        return error(exc.code, exc.message, trace_id, status_code=400)
     return ok(_provider_to_dict(row), trace_id)
 
 
@@ -95,6 +99,15 @@ def list_provider_api(
 ):
     trace_id = trace_id_from_request(request)
     return ok({"items": [_provider_to_dict(row) for row in list_providers(db, user_id=user.id)]}, trace_id)
+
+
+@router.get("/model-provider-presets")
+def list_provider_presets_api(
+    request: Request,
+    _: User = Depends(current_user),
+):
+    trace_id = trace_id_from_request(request)
+    return ok({"items": list_provider_presets()}, trace_id)
 
 
 @router.patch("/model-providers/{provider_id}")
@@ -116,7 +129,8 @@ def update_provider_api(
             enabled=payload.enabled,
         )
     except ModelRegistryError as exc:
-        return error(exc.code, exc.message, trace_id, status_code=404)
+        status_code = 400 if exc.code == 3004 else 404
+        return error(exc.code, exc.message, trace_id, status_code=status_code)
     return ok(_provider_to_dict(row), trace_id)
 
 

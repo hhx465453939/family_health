@@ -28,6 +28,12 @@ export type Provider = {
   updated_at: string;
 };
 
+export type ProviderPreset = {
+  provider_name: string;
+  label: string;
+  base_url: string;
+};
+
 export type ModelCatalog = {
   id: string;
   provider_id: string;

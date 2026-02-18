@@ -1,13 +1,20 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 
 import { api, ApiError } from "../api/client";
-import type { McpServer, ModelCatalog, Provider, RuntimeProfile } from "../api/types";
+import type {
+  McpServer,
+  ModelCatalog,
+  Provider,
+  ProviderPreset,
+  RuntimeProfile,
+} from "../api/types";
 
 type TabKey = "providers" | "runtime" | "mcp";
 
 export function SettingsCenter({ token }: { token: string }) {
   const [tab, setTab] = useState<TabKey>("providers");
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [providerPresets, setProviderPresets] = useState<ProviderPreset[]>([]);
   const [catalog, setCatalog] = useState<ModelCatalog[]>([]);
   const [profiles, setProfiles] = useState<RuntimeProfile[]>([]);
   const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
@@ -16,10 +23,11 @@ export function SettingsCenter({ token }: { token: string }) {
   const [providerFilter, setProviderFilter] = useState("");
   const [providerForm, setProviderForm] = useState({
     provider_name: "gemini",
-    base_url: "https://example.local/gemini",
+    base_url: "https://generativelanguage.googleapis.com/v1beta/models",
     api_key: "",
     enabled: true,
   });
+  const [providerPresetKey, setProviderPresetKey] = useState("gemini");
   const [manualModels, setManualModels] = useState("gemini-custom");
   const [profileForm, setProfileForm] = useState({
     name: "default-profile",
@@ -67,12 +75,14 @@ export function SettingsCenter({ token }: { token: string }) {
 
   const loadData = async () => {
     try {
-      const [providerRes, catalogRes, profileRes, mcpRes] = await Promise.all([
+      const [presetRes, providerRes, catalogRes, profileRes, mcpRes] = await Promise.all([
+        api.listProviderPresets(token),
         api.listProviders(token),
         api.listCatalog(token),
         api.listRuntimeProfiles(token),
         api.listMcpServers(token),
       ]);
+      setProviderPresets(presetRes.items);
       setProviders(providerRes.items);
       setCatalog(catalogRes.items);
       setProfiles(profileRes.items);
@@ -87,9 +97,37 @@ export function SettingsCenter({ token }: { token: string }) {
     void loadData();
   }, []);
 
+  useEffect(() => {
+    const preset = providerPresets.find((item) => item.provider_name === providerPresetKey);
+    if (!preset || providerPresetKey === "custom") {
+      return;
+    }
+    setProviderForm((prev) => ({
+      ...prev,
+      provider_name: preset.provider_name,
+      base_url: preset.base_url,
+    }));
+  }, [providerPresetKey, providerPresets]);
+
   const createProvider = async () => {
+    if (
+      !providerForm.provider_name.trim() ||
+      !providerForm.base_url.trim() ||
+      !providerForm.api_key.trim()
+    ) {
+      setMessage("请填写 Provider、Base URL、API Key");
+      return;
+    }
     try {
-      await api.createProvider(providerForm, token);
+      await api.createProvider(
+        {
+          ...providerForm,
+          provider_name: providerForm.provider_name.trim(),
+          base_url: providerForm.base_url.trim(),
+          api_key: providerForm.api_key.trim(),
+        },
+        token,
+      );
       setMessage("Provider 已保存");
       setProviderForm((prev) => ({ ...prev, api_key: "" }));
       await loadData();
@@ -251,10 +289,20 @@ export function SettingsCenter({ token }: { token: string }) {
 
         {tab === "providers" && (
           <>
-            <p className="muted">支持多供应商管理（新增/编辑/删除/刷新）。</p>
+            <p className="muted">支持预置端点一键填充和自定义完整端点（可持续新增）。</p>
             <label>
               搜索供应商
               <input value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)} />
+            </label>
+            <label>
+              预置供应商
+              <select value={providerPresetKey} onChange={(e) => setProviderPresetKey(e.target.value)}>
+                {providerPresets.map((item) => (
+                  <option key={item.provider_name} value={item.provider_name}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               Provider

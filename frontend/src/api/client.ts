@@ -7,6 +7,7 @@
   KnowledgeBase,
   McpServer,
   ModelCatalog,
+  ProviderPreset,
   Provider,
   RuntimeProfile,
 } from "./types";
@@ -48,10 +49,19 @@ async function request<T>(
   }
 
   const body = (await response.json()) as ApiEnvelope<T>;
-  if (!response.ok || body.code !== 0) {
-    throw new ApiError(body.message, body.code ?? response.status, body.trace_id ?? "unknown");
+  const maybeEnvelope = body as Partial<ApiEnvelope<T>> & { detail?: string };
+  if (!response.ok || maybeEnvelope.code !== 0) {
+    let message =
+      maybeEnvelope.message ?? maybeEnvelope.detail ?? `HTTP ${response.status}`;
+    if (
+      response.status === 401 &&
+      /missing bearer token|invalid token|invalid token type|user not found/i.test(message)
+    ) {
+      message = "登录状态已失效，请重新登录后重试";
+    }
+    throw new ApiError(message, maybeEnvelope.code ?? response.status, maybeEnvelope.trace_id ?? "unknown");
   }
-  return body.data;
+  return maybeEnvelope.data as T;
 }
 
 export const api = {
@@ -79,6 +89,8 @@ export const api = {
     payload: { provider_name: string; base_url: string; api_key: string; enabled: boolean },
     token: string,
   ): Promise<Provider> => request("/model-providers", { method: "POST", body: JSON.stringify(payload) }, token),
+  listProviderPresets: (token: string): Promise<{ items: ProviderPreset[] }> =>
+    request("/model-provider-presets", {}, token),
   listProviders: (token: string): Promise<{ items: Provider[] }> => request("/model-providers", {}, token),
   updateProvider: (
     providerId: string,

@@ -9,8 +9,10 @@
 ## 2. 设置中心（所有用户可用）
 1. 在左侧进入 `设置中心`。
 2. 在 `供应商` 页签可新增/搜索/刷新/更新/删除 Provider。
-3. 在 `模型选择` 页签，从下拉框选择 LLM/Embedding/Reranker 创建 Runtime Profile。
-4. 在 `MCP 工具` 页签：
+3. 新增 Provider 时可先选 `预置供应商` 自动填充端点（Gemini/OpenAI/Zhipu/SiliconFlow/OpenRouter）。
+4. 选择 `Custom` 后可手工填写完整 `Provider + Base URL + API Key`，可持续新增多个不同端点配置。
+5. 在 `模型选择` 页签，从下拉框选择 LLM/Embedding/Reranker 创建 Runtime Profile。
+6. 在 `MCP 工具` 页签：
    - 手工新增 MCP Server。
    - 粘贴 MCP JSON 模板批量导入。
    - 选择并保存 QA Agent 绑定。
@@ -38,6 +40,7 @@
 
 ## 6. 常见问题
 - 登录失败：确认后端已启动，账号是否存在。
+- Provider 新增返回 401：当前登录 token 已失效或缺失，请重新登录后重试。
 - 附件上传失败：可能命中未脱敏敏感信息，请先在设置中心增加脱敏规则。
 - 空消息无法发送：请至少输入问题，或先上传附件后以“仅附件模式”发送。
 - 导出下载失败：任务必须先进入 `done` 状态。

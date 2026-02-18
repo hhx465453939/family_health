@@ -20,6 +20,14 @@ def test_model_registry_and_runtime_profile(client: TestClient):
     access_token = _bootstrap_and_login(client)
     headers = {"Authorization": f"Bearer {access_token}"}
 
+    preset_resp = client.get("/api/v1/model-provider-presets", headers=headers)
+    assert preset_resp.status_code == 200
+    preset_items = preset_resp.json()["data"]["items"]
+    assert any(
+        item["base_url"] == "https://generativelanguage.googleapis.com/v1beta/models"
+        for item in preset_items
+    )
+
     provider_resp = client.post(
         "/api/v1/model-providers",
         json={
@@ -32,6 +40,30 @@ def test_model_registry_and_runtime_profile(client: TestClient):
     )
     assert provider_resp.status_code == 200
     provider_id = provider_resp.json()["data"]["id"]
+
+    zhipu_chat_resp = client.post(
+        "/api/v1/model-providers",
+        json={
+            "provider_name": "zhipu",
+            "base_url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+            "api_key": "secret",
+            "enabled": True,
+        },
+        headers=headers,
+    )
+    assert zhipu_chat_resp.status_code == 200
+
+    zhipu_coding_resp = client.post(
+        "/api/v1/model-providers",
+        json={
+            "provider_name": "zhipu",
+            "base_url": "https://open.bigmodel.cn/api/coding/paas/v4/chat/completions",
+            "api_key": "secret",
+            "enabled": True,
+        },
+        headers=headers,
+    )
+    assert zhipu_coding_resp.status_code == 200
 
     refresh_resp = client.post(
         f"/api/v1/model-providers/{provider_id}/refresh-models",
