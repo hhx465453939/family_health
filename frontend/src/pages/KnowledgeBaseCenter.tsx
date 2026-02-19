@@ -476,7 +476,13 @@ export function KnowledgeBaseCenter({ token, role, locale }: { token: string; ro
         docTotal={pendingFiles.length}
         onPrevDoc={pendingIndex > 0 ? () => setPendingIndex((prev) => Math.max(0, prev - 1)) : undefined}
         onNextDoc={pendingIndex < pendingFiles.length - 1 ? () => setPendingIndex((prev) => Math.min(pendingFiles.length - 1, prev + 1)) : undefined}
-        confirmLabel={locale === "zh" ? "确认上传" : "Upload"}
+        confirmLabel={
+          pendingFiles.length > 1
+            ? (locale === "zh" ? "上传并继续" : "Upload & next")
+            : (locale === "zh" ? "确认上传" : "Upload")
+        }
+        confirmDisabled={!privacyConfirmed}
+        confirmDisabledReason={locale === "zh" ? "请先勾选隐私责任确认" : "Please confirm the privacy responsibility notice first."}
         onCancel={() => {
           setUploadModalOpen(false);
           setPendingFiles([]);
@@ -484,10 +490,6 @@ export function KnowledgeBaseCenter({ token, role, locale }: { token: string; ro
           setPrivacyConfirmed(false);
         }}
         onConfirm={async () => {
-          if (!privacyConfirmed) {
-            setMessage(locale === "zh" ? "请先确认隐私责任提醒" : "Please confirm privacy notice");
-            return;
-          }
           const pendingFile = pendingFiles[pendingIndex];
           if (!pendingFile || !activeKbId) return;
           try {
@@ -507,7 +509,6 @@ export function KnowledgeBaseCenter({ token, role, locale }: { token: string; ro
             const nextIndex = Math.min(pendingIndex, nextFiles.length - 1);
             setPendingFiles(nextFiles);
             setPendingIndex(nextIndex);
-            setPrivacyConfirmed(false);
           }
         }}
         extraControls={(

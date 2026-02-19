@@ -6,6 +6,7 @@ import { DesensitizationModal } from "../components/DesensitizationModal";
 
 type Locale = "zh" | "en";
 type StreamEvent = { type: string; delta?: string; assistant_answer?: string; reasoning_content?: string; message?: string; assistant_message_id?: string };
+type StreamDone = { id?: string; answer?: string; reasoning?: string };
 
 const TEXT = {
   zh: {
@@ -217,6 +218,7 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
 
   const answerQueueRef = useRef("");
   const reasoningQueueRef = useRef("");
+  const lastStreamDoneRef = useRef<StreamDone | null>(null);
   const drainTimerRef = useRef<number | null>(null);
 
   const activeSession = useMemo(() => sessions.find((item) => item.id === activeSessionId) ?? null, [activeSessionId, sessions]);
@@ -552,6 +554,7 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
     setStreamingReasoning("");
     answerQueueRef.current = "";
     reasoningQueueRef.current = "";
+    lastStreamDoneRef.current = null;
     setReasoningExpanded(true);
     setIsStreaming(true);
     startDrain();
@@ -571,16 +574,28 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
           if (evt.type === "reasoning") reasoningQueueRef.current += evt.delta ?? "";
           if (evt.type === "error") setMessage(evt.message ?? "stream failed");
           if (evt.type === "done") {
+            lastStreamDoneRef.current = {
+              id: evt.assistant_message_id as string | undefined,
+              answer: evt.assistant_answer,
+              reasoning: evt.reasoning_content,
+            };
             if (evt.assistant_message_id && evt.reasoning_content) {
               setReasoningByMessageId((prev) => ({ ...prev, [evt.assistant_message_id as string]: evt.reasoning_content as string }));
             }
             if (evt.assistant_answer && !answerQueueRef.current) {
               answerQueueRef.current = evt.assistant_answer;
-              setStreamingAnswer(evt.assistant_answer);
             }
           }
         },
       );
+      if (answerQueueRef.current) {
+        setStreamingAnswer((prev) => prev + answerQueueRef.current);
+        answerQueueRef.current = "";
+      }
+      if (reasoningQueueRef.current) {
+        setStreamingReasoning((prev) => prev + reasoningQueueRef.current);
+        reasoningQueueRef.current = "";
+      }
       stopDrain();
       setIsStreaming(false);
       setReasoningExpanded(false);
@@ -588,10 +603,26 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
       setAttachmentIds([]);
       setAttachmentNames([]);
       const res = await api.listMessages(activeSessionId, token);
-      setMessages(res.items);
+      const done = lastStreamDoneRef.current as StreamDone | null;
+      let items = res.items;
+      if (done?.id && !items.some((msg) => msg.id === done.id)) {
+        items = [
+          ...items,
+          {
+            id: done.id,
+            role: "assistant",
+            content: done.answer ?? "",
+            reasoning_content: done.reasoning ?? "",
+            created_at: new Date().toISOString(),
+          },
+        ];
+      }
+      setMessages(items);
       setMessage(text.streamDone);
-      setStreamingAnswer("");
-      setStreamingReasoning("");
+      if (done?.id && items.some((msg) => msg.id === done.id)) {
+        setStreamingAnswer("");
+        setStreamingReasoning("");
+      }
     } catch (error) {
       stopDrain();
       setIsStreaming(false);
