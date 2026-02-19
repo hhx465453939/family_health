@@ -39,6 +39,15 @@
 - 工程化: npm, uv
 
 ## 快速启动
+### 一键启动（推荐）
+```bash
+python3 quickstart.py
+# 内网访问前端时使用
+python3 quickstart.py --lan
+```
+- 默认读取仓库根目录 `.env` 的 `FH_SERVER_HOST/FH_SERVER_PORT`
+- 自动检查 `uv` 与 `npm`，安装依赖并同时启动前后端
+
 ### 1) 后端
 ```powershell
 cd backend

@@ -136,6 +136,136 @@ powershell -ExecutionPolicy Bypass -File .\scripts\acceptance_integration.ps1 -D
 
 ---
 
+## 5.1 systemd 服务化部署（Ubuntu/NAS）
+
+> 适用于内网服务器/NAS，将前后端作为 systemd 服务常驻运行。
+
+### 5.1.1 统一配置（建议）
+
+在仓库根目录 `.env` 中配置端口与数据目录（示例）:
+```
+FH_SERVER_HOST=0.0.0.0
+FH_SERVER_PORT=8000
+FH_DATA_ROOT=/home/<user>/family_health/data
+FH_RAW_VAULT_DIR=raw_vault
+FH_SANITIZED_WORKSPACE_DIR=sanitized_workspace
+```
+
+说明：
+- `FH_DATA_ROOT` 建议指向独立数据盘或 NAS 数据目录。
+- `FH_RAW_VAULT_DIR` 与 `FH_SANITIZED_WORKSPACE_DIR` 会在 `FH_DATA_ROOT` 下自动创建。
+
+### 5.1.2 后端服务
+
+创建服务文件 `/etc/systemd/system/family-health-backend.service`：
+```
+[Unit]
+Description=Family Health Backend
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/<user>/family_health/backend
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/home/<user>/family_health/.env
+ExecStart=/usr/bin/env uv run python -m app
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+启用与管理：
+```
+sudo systemctl daemon-reload
+sudo systemctl enable --now family-health-backend
+sudo systemctl status family-health-backend
+```
+
+停止与删除：
+```
+sudo systemctl disable --now family-health-backend
+sudo rm /etc/systemd/system/family-health-backend.service
+sudo systemctl daemon-reload
+```
+
+查看日志：
+```
+journalctl -u family-health-backend -f
+```
+
+### 5.1.3 前端服务（内网访问）
+
+前端建议先构建再预览（适合内网常驻）。
+
+首次构建：
+```
+cd /home/<user>/family_health/frontend
+npm install
+npm run build
+```
+
+创建服务文件 `/etc/systemd/system/family-health-frontend.service`：
+```
+[Unit]
+Description=Family Health Frontend
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/<user>/family_health/frontend
+EnvironmentFile=/home/<user>/family_health/.env
+ExecStart=/usr/bin/env npm run preview -- --host 0.0.0.0 --port 5173
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+启用与管理：
+```
+sudo systemctl daemon-reload
+sudo systemctl enable --now family-health-frontend
+sudo systemctl status family-health-frontend
+```
+
+停止与删除：
+```
+sudo systemctl disable --now family-health-frontend
+sudo rm /etc/systemd/system/family-health-frontend.service
+sudo systemctl daemon-reload
+```
+
+查看日志：
+```
+journalctl -u family-health-frontend -f
+```
+
+### 5.1.4 端口与访问
+
+- 后端: `http://<server-ip>:8000`
+- 前端: `http://<server-ip>:5173`
+
+若需要更改端口：
+- 后端修改 `.env` 的 `FH_SERVER_PORT`
+- 前端 `npm run preview -- --port <port>`
+
+注意：
+- `npm run preview` 为简化内网部署方案；如需更强的生产能力，建议使用 Nginx 或 Caddy 托管 `frontend/dist`。
+
+### 5.1.5 卸载与清理
+
+```
+sudo systemctl disable --now family-health-backend family-health-frontend
+sudo rm /etc/systemd/system/family-health-backend.service
+sudo rm /etc/systemd/system/family-health-frontend.service
+sudo systemctl daemon-reload
+```
+
+---
+
 ## 6. 文档维护约定
 
 - 每次**功能或环境变更**时，检查并更新本文档，确保步骤可执行。
