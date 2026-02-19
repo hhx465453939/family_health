@@ -33,6 +33,7 @@ const TEXT = {
     uploadDoc: "上传文档",
     privacyTitle: "隐私与责任提醒",
     privacyNote: "上传前请认真检查姓名、电话、身份证号等敏感信息，确保你已获得本人授权并愿意用于 AI 问答。",
+    privacyAck: "我已审查敏感信息并确认授权，愿意承担上传责任",
     queryTitle: "检索测试",
     query: "查询",
     search: "检索",
@@ -80,6 +81,7 @@ const TEXT = {
     uploadDoc: "Upload files",
     privacyTitle: "Privacy Notice",
     privacyNote: "Review sensitive data (name, phone, ID, etc.) before uploading. Only upload with proper consent for AI Q&A.",
+    privacyAck: "I have reviewed sensitive data and accept responsibility",
     queryTitle: "Retrieval Test",
     query: "Query",
     search: "Search",
@@ -123,6 +125,7 @@ export function KnowledgeBaseCenter({ token, role, locale }: { token: string; ro
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingIndex, setPendingIndex] = useState(0);
+  const [privacyConfirmed, setPrivacyConfirmed] = useState(false);
 
   const [form, setForm] = useState({
     name: "family-kb",
@@ -297,6 +300,7 @@ export function KnowledgeBaseCenter({ token, role, locale }: { token: string; ro
     const list = Array.from(files);
     setPendingFiles(list);
     setPendingIndex(0);
+    setPrivacyConfirmed(false);
     setUploadModalOpen(true);
   };
 
@@ -477,8 +481,13 @@ export function KnowledgeBaseCenter({ token, role, locale }: { token: string; ro
           setUploadModalOpen(false);
           setPendingFiles([]);
           setPendingIndex(0);
+          setPrivacyConfirmed(false);
         }}
         onConfirm={async () => {
+          if (!privacyConfirmed) {
+            setMessage(locale === "zh" ? "请先确认隐私责任提醒" : "Please confirm privacy notice");
+            return;
+          }
           const pendingFile = pendingFiles[pendingIndex];
           if (!pendingFile || !activeKbId) return;
           try {
@@ -498,12 +507,21 @@ export function KnowledgeBaseCenter({ token, role, locale }: { token: string; ro
             const nextIndex = Math.min(pendingIndex, nextFiles.length - 1);
             setPendingFiles(nextFiles);
             setPendingIndex(nextIndex);
+            setPrivacyConfirmed(false);
           }
         }}
         extraControls={(
           <div className="privacy-warning">
             <strong>{text.privacyTitle}</strong>
             <p>{text.privacyNote}</p>
+            <label className="inline-check">
+              <input
+                type="checkbox"
+                checked={privacyConfirmed}
+                onChange={(e) => setPrivacyConfirmed(e.target.checked)}
+              />
+              {text.privacyAck}
+            </label>
           </div>
         )}
       />
