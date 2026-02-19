@@ -33,10 +33,17 @@ uv sync
 # 或: uv pip install -r requirements.txt
 ```
 
+- **统一端口配置（推荐）**：
+  - 在仓库根目录 `.env` 配置后端地址，前端代理会自动跟随（可参考 `.env.example`）：
+    ```
+    FH_SERVER_HOST=127.0.0.1
+    FH_SERVER_PORT=8000
+    ```
 - **启动服务**:
   ```bash
-  uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+  uv run python -m app
   ```
+- 若出现 `Address already in use`，请在根目录 `.env` 中修改 `FH_SERVER_PORT` 后重试。
 - **兼容迁移**:
   - 启动时会自动执行 SQLite 轻量兼容迁移（仅补齐缺失列，不清空数据），用于兼容旧数据库结构导致的设置中心/聊天中心/知识库中心 `500` 问题（如 `knowledge_bases.user_id`、知识库策略字段、`desensitization_rules.user_id`、`pii_mapping_vault.user_id`、`chat_sessions.context_message_limit`、`chat_attachments.content_type/is_image` 缺失）。
 - **数据目录**（首次运行会自动创建）:
@@ -58,6 +65,7 @@ npm run dev
 ```
 
 - 开发时前端默认将 `/api` 代理到后端 `http://localhost:8000`（见 `frontend/vite.config.ts`）。
+- 若修改了 `.env` 中的 `FH_SERVER_HOST/FH_SERVER_PORT`，前端代理会自动切换到新地址。
 - Windows 若遇到 `WinError 10013`（套接字权限错误），请优先保持 `--host 127.0.0.1`；仅在需要内网其他设备访问时再改成 `--host 0.0.0.0`。
 - 如果 `npm run dev` 只能本机访问（`localhost:5173`），请改用 `npm run dev:lan`，再通过 `http://<局域网IP>:5173` 访问。
 

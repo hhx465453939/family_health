@@ -5,7 +5,16 @@
 ```bash
 uv venv
 uv sync
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uv run python -m app
+```
+
+## Config
+
+Backend host/port are read from repo root `.env` (see `.env.example`):
+
+```
+FH_SERVER_HOST=127.0.0.1
+FH_SERVER_PORT=8000
 ```
 
 ## Tests

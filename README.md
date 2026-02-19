@@ -35,7 +35,12 @@
 cd backend
 uv venv
 uv sync
-uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uv run python -m app
+```
+端口统一从仓库根 `.env` 读取（参考 `.env.example`）：
+```
+FH_SERVER_HOST=127.0.0.1
+FH_SERVER_PORT=8000
 ```
 
 ### 2) 前端
@@ -51,6 +56,8 @@ npm run dev
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:8000`
 - LAN Frontend（`npm run dev:lan`）: `http://<你的局域网IP>:5173`
+
+提示：若需要修改后端端口，改 `.env` 中 `FH_SERVER_PORT` 即可，前端代理会自动跟随。
 
 ## 质量检查
 ### Backend
