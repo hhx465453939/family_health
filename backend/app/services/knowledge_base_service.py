@@ -13,7 +13,7 @@ from app.models.kb_chunk import KbChunk
 from app.models.kb_document import KbDocument
 from app.models.knowledge_base import KnowledgeBase
 from app.models.llm_runtime_profile import LlmRuntimeProfile
-from app.services.desensitization_service import sanitize_text
+from app.services.desensitization_service import DesensitizationError, sanitize_text
 from app.services.file_text_extract import extract_text_from_file, safe_storage_name
 
 
@@ -385,6 +385,8 @@ def upload_kb_document(
         )
         kb.status = "failed"
         db.commit()
+        if isinstance(exc, DesensitizationError):
+            raise KbError(7007, exc.message) from exc
         raise KbError(7007, f"Upload parse failed: {type(exc).__name__}") from exc
 
 

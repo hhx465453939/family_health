@@ -3,7 +3,7 @@
 ## 元信息
 - 模块名称: frontend-auth-session
 - 创建时间: 2026-02-18
-- 最后更新: 2026-02-18
+- 最后更新: 2026-02-19
 - 相关文件: `frontend/src/api/client.ts`, `frontend/src/App.tsx`, `frontend/src/pages/AuthPage.tsx`, `docs/USER_GUIDE.md`
 - 依赖模块: auth, settings-center, chat-center
 - 用户说明书路径（涉及前端功能时）: `docs/USER_GUIDE.md`
@@ -29,6 +29,20 @@
   - localStorage token -> API Authorization -> 401 -> 清理 localStorage -> 用户重新登录
 
 ## Debug 历史
+### [2026-02-19 00:00] 本地会话结构校验
+- 问题描述
+  - 内网访问时出现多次 401，可能源于本地缓存的损坏会话或缺失 token。
+- 根因定位
+  - `loadSession()` 未校验 `token/role/userId`，损坏数据也会进入工作区并触发鉴权失败。
+- 解决方案
+  - 读取 localStorage 时校验必要字段，缺失则视为未登录。
+- 代码变更（文件/函数）
+  - `frontend/src/App.tsx`: `loadSession()` 增加字段校验
+- 验证结果
+  - 待执行前端构建检查。
+- 影响评估
+  - 仅影响本地会话恢复逻辑，不影响登录流程。
+
 ### [2026-02-18 16:45] 配置页/聊天页连续 401 修复
 - 问题描述
   - F12 显示大量 `401 Unauthorized`，配置页和聊天页均报错。

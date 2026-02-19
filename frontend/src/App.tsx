@@ -22,7 +22,11 @@ function loadSession(): UserSession | null {
     return null;
   }
   try {
-    return JSON.parse(raw) as UserSession;
+    const parsed = JSON.parse(raw) as UserSession;
+    if (!parsed?.token || !parsed?.role || !parsed?.userId) {
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }
