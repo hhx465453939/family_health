@@ -10,8 +10,13 @@ _SQLITE_COMPAT_COLUMNS: dict[str, dict[str, str]] = {
     "llm_runtime_profiles": {"user_id": "VARCHAR(36)"},
     "mcp_servers": {"user_id": "VARCHAR(36)"},
     "agent_mcp_bindings": {"user_id": "VARCHAR(36)"},
-    "desensitization_rules": {"user_id": "VARCHAR(36)"},
-    "pii_mapping_vault": {"user_id": "VARCHAR(36)"},
+    "desensitization_rules": {"user_id": "VARCHAR(36)", "tag": "VARCHAR(40)"},
+    "pii_mapping_vault": {
+        "user_id": "VARCHAR(36)",
+        "source_type": "VARCHAR(60)",
+        "source_id": "VARCHAR(64)",
+        "source_path": "TEXT",
+    },
     "knowledge_bases": {
         "user_id": "VARCHAR(36)",
         "semantic_model_id": "VARCHAR(36)",

@@ -132,3 +132,44 @@ export type ExportJob = {
   created_at: string;
   updated_at: string;
 };
+
+export type DesensitizationRule = {
+  id: string;
+  member_scope: string;
+  rule_type: string;
+  pattern: string;
+  replacement_token: string;
+  tag?: string | null;
+  enabled: boolean;
+};
+
+export type DesensitizationPreset = {
+  key: string;
+  label: string;
+  rule_type: string;
+  pattern: string;
+  replacement_token: string;
+  tag?: string | null;
+};
+
+export type FilePreview = {
+  file_name: string;
+  text: string;
+};
+
+export type ExportCandidateChat = {
+  id: string;
+  role: string;
+  created_at: string;
+  preview: string;
+};
+
+export type ExportCandidateKb = {
+  id: string;
+  kb_id: string;
+  kb_name: string;
+  status: string;
+  source_path: string | null;
+  masked_path: string | null;
+  updated_at: string;
+};

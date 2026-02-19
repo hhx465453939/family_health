@@ -12,6 +12,7 @@ from app.services.export_service import (
     create_export_job,
     delete_export_job,
     get_export_job,
+    list_export_candidates,
     list_export_jobs,
 )
 
@@ -46,6 +47,23 @@ def list_export_jobs_api(
 ):
     trace_id = trace_id_from_request(request)
     return ok({"items": list_export_jobs(db, user_id=user.id)}, trace_id)
+
+
+@router.post("/exports/candidates")
+def list_export_candidates_api(
+    payload: ExportCreateRequest,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    trace_id = trace_id_from_request(request)
+    items = list_export_candidates(
+        db,
+        user_id=user.id,
+        export_types=payload.export_types,
+        chat_limit=int(payload.filters.get("chat_limit", 200)),
+    )
+    return ok(items, trace_id)
 
 
 @router.get("/exports/jobs/{job_id}")

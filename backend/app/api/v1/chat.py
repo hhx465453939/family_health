@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -12,6 +12,7 @@ from app.schemas.chat import (
     ChatSessionCreateRequest,
     ChatSessionUpdateRequest,
     DesensitizationRuleCreateRequest,
+    DesensitizationRuleUpdateRequest,
 )
 from app.services.chat_service import (
     ChatError,
@@ -30,6 +31,8 @@ from app.services.chat_service import (
     update_session,
 )
 from app.services.desensitization_service import DesensitizationError, create_rule
+from app.services.file_text_extract import extract_text_from_file
+from app.services.knowledge_base_service import KbError, ensure_chat_default_kb, ingest_text_to_kb
 
 router = APIRouter()
 
@@ -276,11 +279,14 @@ async def create_attachment_api(
     session_id: str,
     request: Request,
     file: UploadFile = File(...),
+    kb_mode: str = Form(default="context"),
+    kb_id: str | None = Form(default=None),
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
     trace_id = trace_id_from_request(request)
     file_bytes = await file.read()
+    stored_kb_id: str | None = None
     try:
         row = add_attachment(
             db,
@@ -290,14 +296,33 @@ async def create_attachment_api(
             content_type=file.content_type,
             file_bytes=file_bytes,
         )
+        if kb_mode in {"chat_default", "kb"}:
+            target_kb_id = kb_id
+            if kb_mode == "chat_default":
+                target_kb_id = ensure_chat_default_kb(db, user.id).id
+            if not target_kb_id:
+                raise ChatError(4002, "Knowledge base target missing")
+            ingest_text_to_kb(
+                db,
+                kb_id=target_kb_id,
+                user_id=user.id,
+                title=file.filename or "attachment.txt",
+                content=extract_text_from_file(file.filename or "attachment.txt", file_bytes),
+                source_type="chat_attachment",
+                source_path=row.raw_path,
+            )
+            stored_kb_id = target_kb_id
     except ChatError as exc:
         status_code = 422 if exc.code == 5002 else 400
         return error(exc.code, exc.message, trace_id, status_code=status_code)
+    except KbError as exc:
+        return error(exc.code, exc.message, trace_id, status_code=400)
     return ok(
         {
             "id": row.id,
             "file_name": row.file_name,
             "parse_status": row.parse_status,
+            "kb_id": stored_kb_id,
         },
         trace_id,
     )
@@ -319,6 +344,7 @@ def create_rule_api(
             rule_type=payload.rule_type,
             pattern=payload.pattern,
             replacement_token=payload.replacement_token,
+            tag=payload.tag,
             enabled=payload.enabled,
         )
     except DesensitizationError as exc:
@@ -330,6 +356,7 @@ def create_rule_api(
             "rule_type": row.rule_type,
             "pattern": row.pattern,
             "replacement_token": row.replacement_token,
+            "tag": row.tag,
             "enabled": row.enabled,
         },
         trace_id,
@@ -339,14 +366,14 @@ def create_rule_api(
 @router.get("/desensitization/rules")
 def list_rule_api(
     request: Request,
+    enabled_only: bool = True,
     user: User = Depends(current_user),
     db: Session = Depends(get_db),
 ):
     trace_id = trace_id_from_request(request)
-    query = db.query(DesensitizationRule).filter(
-        DesensitizationRule.user_id == user.id,
-        DesensitizationRule.enabled.is_(True),
-    )
+    query = db.query(DesensitizationRule).filter(DesensitizationRule.user_id == user.id)
+    if enabled_only:
+        query = query.filter(DesensitizationRule.enabled.is_(True))
     rows = query.order_by(DesensitizationRule.updated_at.asc()).all()
     return ok(
         {
@@ -357,6 +384,7 @@ def list_rule_api(
                     "rule_type": row.rule_type,
                     "pattern": row.pattern,
                     "replacement_token": row.replacement_token,
+                    "tag": row.tag,
                     "enabled": row.enabled,
                 }
                 for row in rows
@@ -364,3 +392,72 @@ def list_rule_api(
         },
         trace_id,
     )
+
+
+@router.patch("/desensitization/rules/{rule_id}")
+def update_rule_api(
+    rule_id: str,
+    payload: DesensitizationRuleUpdateRequest,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    trace_id = trace_id_from_request(request)
+    row = (
+        db.query(DesensitizationRule)
+        .filter(DesensitizationRule.id == rule_id, DesensitizationRule.user_id == user.id)
+        .first()
+    )
+    if not row:
+        return error(5004, "Rule not found", trace_id, status_code=404)
+    data = payload.model_dump(exclude_unset=True)
+    for key, value in data.items():
+        setattr(row, key, value)
+    db.commit()
+    db.refresh(row)
+    return ok(
+        {
+            "id": row.id,
+            "member_scope": row.member_scope,
+            "rule_type": row.rule_type,
+            "pattern": row.pattern,
+            "replacement_token": row.replacement_token,
+            "tag": row.tag,
+            "enabled": row.enabled,
+        },
+        trace_id,
+    )
+
+
+@router.delete("/desensitization/rules/{rule_id}")
+def delete_rule_api(
+    rule_id: str,
+    request: Request,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    trace_id = trace_id_from_request(request)
+    row = (
+        db.query(DesensitizationRule)
+        .filter(DesensitizationRule.id == rule_id, DesensitizationRule.user_id == user.id)
+        .first()
+    )
+    if not row:
+        return error(5004, "Rule not found", trace_id, status_code=404)
+    db.delete(row)
+    db.commit()
+    return ok({"deleted": True}, trace_id)
+
+
+@router.get("/desensitization/presets")
+def list_presets_api(
+    request: Request,
+):
+    trace_id = trace_id_from_request(request)
+    presets = [
+        {"key": "PHONE", "label": "Phone", "rule_type": "regex", "pattern": r"\b1\d{10}\b", "replacement_token": "[[PHONE]]", "tag": "电话"},
+        {"key": "EMAIL", "label": "Email", "rule_type": "regex", "pattern": r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "replacement_token": "[[EMAIL]]", "tag": "邮箱"},
+        {"key": "ID_CN", "label": "ID Card (CN)", "rule_type": "regex", "pattern": r"\b\d{15,18}[\dXx]\b", "replacement_token": "[[ID_CARD]]", "tag": "身份证"},
+        {"key": "NAME", "label": "Name", "rule_type": "literal", "pattern": "", "replacement_token": "[[NAME]]", "tag": "姓名"},
+    ]
+    return ok({"items": presets}, trace_id)

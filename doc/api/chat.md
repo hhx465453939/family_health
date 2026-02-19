@@ -27,11 +27,15 @@
 
 ## 3) 附件上传
 - `POST /api/v1/chat/sessions/{id}/attachments`（multipart）
+- 可选表单字段：
+  - `kb_mode`: `context` | `chat_default` | `kb`
+  - `kb_id`: 当 `kb_mode=kb` 时必填
 - 后端执行：
   1. 原始文件写入 `data/raw_vault/`
   2. 转文本并线性脱敏
   3. 脱敏文本写入 `data/sanitized_workspace/`
   4. 仅 `parse_status=done` 可用于 Agent
+  5. 若 `kb_mode` 指定入库，将同步写入知识库
 
 ## 4) 脱敏规则
 - `POST /api/v1/desensitization/rules`（登录用户）

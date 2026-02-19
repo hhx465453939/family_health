@@ -261,7 +261,14 @@ def _create_doc_and_chunks(
     db.add(doc)
     db.flush()
 
-    sanitized_text, _ = sanitize_text(db, user_scope=user_id, text=content)
+    sanitized_text, _ = sanitize_text(
+        db,
+        user_scope=user_id,
+        text=content,
+        source_type=source_type,
+        source_id=doc.id,
+        source_path=source_path,
+    )
     safe_title = safe_storage_name(title, fallback="document")
     masked_path = sanitized_workspace_root() / "knowledge_bases" / kb.id / f"{doc.id}_{safe_title}.md"
     masked_path.parent.mkdir(parents=True, exist_ok=True)
@@ -284,6 +291,79 @@ def _create_doc_and_chunks(
             )
         )
     return doc.id, chunk_count, doc.status
+
+
+def ensure_chat_default_kb(db: Session, user_id: str) -> KnowledgeBase:
+    existing = (
+        db.query(KnowledgeBase)
+        .filter(KnowledgeBase.user_id == user_id, KnowledgeBase.name == "Chat Default KB")
+        .first()
+    )
+    if existing:
+        return existing
+    defaults = get_kb_global_defaults(db, user_id)
+    return create_kb(
+        db,
+        user_id=user_id,
+        name="Chat Default KB",
+        member_scope="global",
+        chunk_size=1000,
+        chunk_overlap=150,
+        top_k=8,
+        rerank_top_n=4,
+        embedding_model_id=defaults["embedding_model_id"],
+        reranker_model_id=defaults["reranker_model_id"],
+        semantic_model_id=defaults["semantic_model_id"],
+        use_global_defaults=True,
+        retrieval_strategy=str(defaults["retrieval_strategy"]),
+        keyword_weight=float(defaults["keyword_weight"]),
+        semantic_weight=float(defaults["semantic_weight"]),
+        rerank_weight=float(defaults["rerank_weight"]),
+        strategy_params=defaults.get("strategy_params", {}),
+    )
+
+
+def ingest_text_to_kb(
+    db: Session,
+    kb_id: str,
+    user_id: str,
+    title: str,
+    content: str,
+    source_type: str,
+    source_path: str | None = None,
+) -> dict:
+    kb = _ensure_kb(db, kb_id, user_id=user_id)
+    kb.status = "building"
+    try:
+        doc_id, chunk_count, status = _create_doc_and_chunks(
+            db,
+            kb=kb,
+            user_id=user_id,
+            title=title,
+            content=content,
+            source_type=source_type,
+            source_path=source_path,
+        )
+        kb.status = "ready"
+        db.commit()
+        return {"document_id": doc_id, "chunks": chunk_count, "status": status}
+    except Exception as exc:  # noqa: BLE001
+        db.add(
+            KbDocument(
+                id=str(uuid4()),
+                kb_id=kb.id,
+                member_id=user_id,
+                source_type=source_type,
+                source_path=source_path,
+                status="error",
+                error_message=str(exc),
+            )
+        )
+        kb.status = "failed"
+        db.commit()
+        if isinstance(exc, DesensitizationError):
+            raise KbError(7007, exc.message) from exc
+        raise KbError(7007, f"Upload parse failed: {type(exc).__name__}") from exc
 
 
 def build_kb(

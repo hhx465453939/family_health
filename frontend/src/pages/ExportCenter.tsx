@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 
 import { api, ApiError } from "../api/client";
-import type { ExportJob } from "../api/types";
+import type { ExportCandidateChat, ExportCandidateKb, ExportJob } from "../api/types";
+import { DesensitizationModal } from "../components/DesensitizationModal";
 
 type Locale = "zh" | "en";
 
@@ -59,11 +60,21 @@ export function ExportCenter({ token, locale }: { token: string; locale: Locale 
   const [kbEnabled, setKbEnabled] = useState(true);
   const [chatLimit, setChatLimit] = useState(200);
   const [message, setMessage] = useState<string>(text.init);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [candidatesLoading, setCandidatesLoading] = useState(false);
+  const [chatCandidates, setChatCandidates] = useState<ExportCandidateChat[]>([]);
+  const [kbCandidates, setKbCandidates] = useState<ExportCandidateKb[]>([]);
+  const [previewText, setPreviewText] = useState("");
+  const [previewName, setPreviewName] = useState("");
+  const [candidateType, setCandidateType] = useState<"chat" | "kb">("chat");
+  const [candidateFilter, setCandidateFilter] = useState("");
+  const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
 
   const loadJobs = async () => {
     try {
       const res = await api.listExportJobs(token);
       setJobs(res.items);
+      setSelectedJobs([]);
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : text.readFailed);
     }
@@ -79,8 +90,10 @@ export function ExportCenter({ token, locale }: { token: string; locale: Locale 
       setMessage(text.chooseType);
       return;
     }
+    setReviewOpen(true);
+    setCandidatesLoading(true);
     try {
-      await api.createExportJob(
+      const res = await api.listExportCandidates(
         {
           member_scope: "global",
           export_types: exportTypes,
@@ -90,10 +103,16 @@ export function ExportCenter({ token, locale }: { token: string; locale: Locale 
         },
         token,
       );
-      setMessage(text.createDone);
-      await loadJobs();
+      setChatCandidates(res.chat_messages);
+      setKbCandidates(res.kb_documents);
+      setCandidateType(chatEnabled ? "chat" : "kb");
+      setPreviewText("");
+      setPreviewName("");
     } catch (error) {
       setMessage(error instanceof ApiError ? error.message : text.createFailed);
+      setReviewOpen(false);
+    } finally {
+      setCandidatesLoading(false);
     }
   };
 
@@ -122,6 +141,30 @@ export function ExportCenter({ token, locale }: { token: string; locale: Locale 
     } catch {
       setMessage(text.downloadFailed);
     }
+  };
+
+  const batchDownload = async () => {
+    if (selectedJobs.length === 0) {
+      setMessage(locale === "zh" ? "请选择要下载的任务" : "Select jobs to download");
+      return;
+    }
+    for (const jobId of selectedJobs) {
+      try {
+        const blob = await api.downloadExportJob(jobId, token);
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `${jobId}.zip`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      } catch {
+        setMessage(text.downloadFailed);
+        return;
+      }
+    }
+    setMessage(text.downloadDone);
   };
 
   return (
@@ -158,6 +201,11 @@ export function ExportCenter({ token, locale }: { token: string; locale: Locale 
 
       <div className="panel">
         <h3>{text.jobs}</h3>
+        <div className="actions">
+          <button type="button" onClick={batchDownload}>
+            {locale === "zh" ? "批量下载" : "Batch Download"}
+          </button>
+        </div>
         <div className="list">
           {jobs.map((item) => (
             <article key={item.id} className="list-item">
@@ -168,6 +216,17 @@ export function ExportCenter({ token, locale }: { token: string; locale: Locale 
                 </small>
               </div>
               <div className="actions">
+                <label className="inline-check">
+                  <input
+                    type="checkbox"
+                    checked={selectedJobs.includes(item.id)}
+                    onChange={(e) =>
+                      setSelectedJobs((prev) =>
+                        e.target.checked ? [...prev, item.id] : prev.filter((x) => x !== item.id),
+                      )
+                    }
+                  />
+                </label>
                 <button type="button" onClick={() => void download(item.id)}>
                   {text.download}
                 </button>
@@ -179,6 +238,102 @@ export function ExportCenter({ token, locale }: { token: string; locale: Locale 
           ))}
         </div>
       </div>
+      <DesensitizationModal
+        open={reviewOpen}
+        token={token}
+        locale={locale}
+        title={locale === "zh" ? "导出脱敏预览" : "Export Preview & Mask"}
+        previewText={previewText}
+        previewName={previewName}
+        confirmLabel={locale === "zh" ? "确认导出" : "Create Export"}
+        onCancel={() => setReviewOpen(false)}
+        onConfirm={async () => {
+          const exportTypes = [chatEnabled ? "chat" : "", kbEnabled ? "kb" : ""].filter(Boolean);
+          if (exportTypes.length === 0) return;
+          if (includeRaw) {
+            const ok = window.confirm(locale === "zh" ? "将包含原始文件（可能含敏感信息），确认继续？" : "Including raw files may expose sensitive data. Continue?");
+            if (!ok) {
+              return;
+            }
+          }
+          try {
+            await api.createExportJob(
+              {
+                member_scope: "global",
+                export_types: exportTypes,
+                include_raw_file: includeRaw,
+                include_sanitized_text: includeSanitized,
+                filters: { chat_limit: chatLimit },
+              },
+              token,
+            );
+            setMessage(text.createDone);
+            await loadJobs();
+            setReviewOpen(false);
+          } catch (error) {
+            setMessage(error instanceof ApiError ? error.message : text.createFailed);
+          }
+        }}
+        extraControls={(
+          <div className="panel" style={{ border: "1px dashed rgba(255,255,255,0.15)", background: "transparent" }}>
+            <strong>{locale === "zh" ? "导出预览" : "Export Preview"}</strong>
+            <div className="inline-check">
+              <label>
+                <input type="radio" checked={candidateType === "chat"} onChange={() => setCandidateType("chat")} />
+                {text.chat}
+              </label>
+              <label>
+                <input type="radio" checked={candidateType === "kb"} onChange={() => setCandidateType("kb")} />
+                {text.kb}
+              </label>
+              <input
+                placeholder={locale === "zh" ? "搜索候选项" : "Search candidates"}
+                value={candidateFilter}
+                onChange={(e) => setCandidateFilter(e.target.value)}
+              />
+            </div>
+            {candidatesLoading && <div className="inline-message">{locale === "zh" ? "加载中..." : "Loading..."}</div>}
+            <div className="list" style={{ maxHeight: 200, overflow: "auto" }}>
+              {(candidateType === "chat" ? chatCandidates : kbCandidates)
+                .filter((item) => {
+                  const key = candidateType === "chat"
+                    ? (item as ExportCandidateChat).preview
+                    : `${(item as ExportCandidateKb).kb_name} ${(item as ExportCandidateKb).source_path ?? ""}`;
+                  return key.toLowerCase().includes(candidateFilter.toLowerCase());
+                })
+                .map((item) => (
+                  <article key={item.id} className="list-item" onClick={async () => {
+                    try {
+                      if (candidateType === "chat") {
+                        const res = await api.previewChatMessage(item.id, token);
+                        setPreviewText(res.text);
+                        setPreviewName(res.file_name);
+                      } else {
+                        const res = await api.previewKbDocument(item.id, token, "raw");
+                        setPreviewText(res.text);
+                        setPreviewName(res.file_name);
+                      }
+                    } catch (error) {
+                      setMessage(error instanceof ApiError ? error.message : text.readFailed);
+                    }
+                  }}>
+                    {candidateType === "chat" ? (
+                      <div>
+                        <strong>{(item as ExportCandidateChat).role}</strong>
+                        <small>{(item as ExportCandidateChat).preview}</small>
+                      </div>
+                    ) : (
+                      <div>
+                        <strong>{(item as ExportCandidateKb).kb_name}</strong>
+                        <small>{(item as ExportCandidateKb).source_path ?? (item as ExportCandidateKb).masked_path ?? item.id}</small>
+                      </div>
+                    )}
+                  </article>
+                ))}
+            </div>
+          </div>
+        )}
+      />
     </section>
   );
 }

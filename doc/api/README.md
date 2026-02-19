@@ -13,6 +13,7 @@
 | 检索 | retrieval.md | 检索接口、引用来源（仅脱敏域）（已实现首版） |
 | 脱敏 | desensitization.md | 线性脱敏规则、双域隔离（阶段 2 已实现最小规则与门禁） |
 | 数据导出 | export.md | 导出任务、打包、下载（已实现首版） |
+| 文件预览 | file_preview.md | 上传/导出预览、候选列表、全文抽取 |
 | Pipeline | pipeline.md | 文档入库、转换、脱敏、建库流程（最小流程已实现） |
 
 文档模板见项目根规则：`.cursor/rules/api-first-development.mdc` 中的「API 文档标准模板」。

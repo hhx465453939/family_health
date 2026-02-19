@@ -243,15 +243,26 @@ export const api = {
     request(`/agent/roles/${roleId}`, {}, token),
   listMessages: (sessionId: string, token: string): Promise<{ items: ChatMessage[] }> =>
     request(`/chat/sessions/${sessionId}/messages`, {}, token),
-  uploadAttachment: async (sessionId: string, file: File, token: string): Promise<{ id: string }> => {
+  uploadAttachment: async (
+    sessionId: string,
+    file: File,
+    token: string,
+    options?: { kb_mode?: "context" | "chat_default" | "kb"; kb_id?: string },
+  ): Promise<{ id: string; kb_id?: string | null }> => {
     const form = new FormData();
     form.append("file", file);
+    if (options?.kb_mode) {
+      form.append("kb_mode", options.kb_mode);
+    }
+    if (options?.kb_id) {
+      form.append("kb_id", options.kb_id);
+    }
     const response = await fetch(`${API_PREFIX}/chat/sessions/${sessionId}/attachments`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: form,
     });
-    const body = (await response.json()) as ApiEnvelope<{ id: string }>;
+    const body = (await response.json()) as ApiEnvelope<{ id: string; kb_id?: string | null }>;
     if (!response.ok || body.code !== 0) {
       if (
         response.status === 401 &&
@@ -263,6 +274,46 @@ export const api = {
     }
     return body.data;
   },
+  previewFile: async (file: File, token: string): Promise<{ file_name: string; text: string }> => {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch(`${API_PREFIX}/file-preview/extract`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    const body = (await response.json()) as ApiEnvelope<{ file_name: string; text: string }>;
+    if (!response.ok || body.code !== 0) {
+      throw new ApiError(body.message, body.code ?? response.status, body.trace_id ?? "unknown");
+    }
+    return body.data;
+  },
+  previewKbDocument: (docId: string, token: string, source: "raw" | "sanitized" = "raw"): Promise<{ file_name: string; text: string }> =>
+    request(`/file-preview/kb-documents/${docId}?source=${source}`, {}, token),
+  previewChatMessage: (messageId: string, token: string): Promise<{ file_name: string; text: string }> =>
+    request(`/file-preview/chat-messages/${messageId}`, {}, token),
+  listDesensitizationRules: (token: string, enabledOnly = false): Promise<{ items: Array<{ id: string; member_scope: string; rule_type: string; pattern: string; replacement_token: string; tag?: string | null; enabled: boolean }> }> =>
+    request(`/desensitization/rules?enabled_only=${enabledOnly ? "true" : "false"}`, {}, token),
+  createDesensitizationRule: (
+    payload: { member_scope: string; rule_type: string; pattern: string; replacement_token: string; tag?: string | null; enabled: boolean },
+    token: string,
+  ): Promise<{ id: string; member_scope: string; rule_type: string; pattern: string; replacement_token: string; tag?: string | null; enabled: boolean }> =>
+    request("/desensitization/rules", { method: "POST", body: JSON.stringify(payload) }, token),
+  updateDesensitizationRule: (
+    ruleId: string,
+    payload: Partial<{ member_scope: string; rule_type: string; pattern: string; replacement_token: string; tag?: string | null; enabled: boolean }>,
+    token: string,
+  ): Promise<{ id: string; member_scope: string; rule_type: string; pattern: string; replacement_token: string; tag?: string | null; enabled: boolean }> =>
+    request(`/desensitization/rules/${ruleId}`, { method: "PATCH", body: JSON.stringify(payload) }, token),
+  deleteDesensitizationRule: (ruleId: string, token: string): Promise<{ deleted: boolean }> =>
+    request(`/desensitization/rules/${ruleId}`, { method: "DELETE" }, token),
+  listDesensitizationPresets: (token: string): Promise<{ items: Array<{ key: string; label: string; rule_type: string; pattern: string; replacement_token: string; tag?: string | null }> }> =>
+    request("/desensitization/presets", {}, token),
+  listExportCandidates: (
+    payload: { member_scope: string; export_types: string[]; include_raw_file: boolean; include_sanitized_text: boolean; filters: Record<string, unknown> },
+    token: string,
+  ): Promise<{ chat_messages: Array<{ id: string; role: string; created_at: string; preview: string }>; kb_documents: Array<{ id: string; kb_id: string; kb_name: string; status: string; source_path: string | null; masked_path: string | null; updated_at: string }> }> =>
+    request("/exports/candidates", { method: "POST", body: JSON.stringify(payload) }, token),
   qa: (
     payload: {
       session_id: string;

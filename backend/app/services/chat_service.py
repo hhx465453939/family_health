@@ -261,7 +261,14 @@ def add_attachment(
 
     try:
         raw_text = extract_text_from_file(file_name, file_bytes)
-        sanitized_text, _ = sanitize_text(db, user_scope=user_id, text=raw_text)
+        sanitized_text, _ = sanitize_text(
+            db,
+            user_scope=user_id,
+            text=raw_text,
+            source_type="chat_attachment",
+            source_id=attachment_id,
+            source_path=str(raw_path),
+        )
         sanitized_path.parent.mkdir(parents=True, exist_ok=True)
         sanitized_path.write_text(sanitized_text, encoding="utf-8")
         row.parse_status = "done"

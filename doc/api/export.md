@@ -5,6 +5,7 @@
 - `GET /api/v1/exports/jobs/{id}`
 - `GET /api/v1/exports/jobs/{id}/download`
 - `DELETE /api/v1/exports/jobs/{id}`
+- `POST /api/v1/exports/candidates`（导出前预览候选列表）
 
 ## 创建任务示例
 ```json

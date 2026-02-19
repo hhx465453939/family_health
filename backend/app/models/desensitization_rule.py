@@ -17,6 +17,7 @@ class DesensitizationRule(Base):
     rule_type: Mapped[str] = mapped_column(String(20), nullable=False, default="literal")
     pattern: Mapped[str] = mapped_column(String(500), nullable=False)
     replacement_token: Mapped[str] = mapped_column(String(100), nullable=False)
+    tag: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

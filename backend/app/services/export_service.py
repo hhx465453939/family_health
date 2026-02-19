@@ -14,6 +14,7 @@ from app.models.chat_session import ChatSession
 from app.models.export_item import ExportItem
 from app.models.export_job import ExportJob
 from app.models.kb_document import KbDocument
+from app.models.knowledge_base import KnowledgeBase
 
 
 class ExportError(Exception):
@@ -148,6 +149,58 @@ def list_export_jobs(db: Session, user_id: str) -> list[dict]:
         .all()
     )
     return [_job_to_dict(row) for row in rows]
+
+
+def list_export_candidates(
+    db: Session,
+    user_id: str,
+    export_types: list[str],
+    chat_limit: int,
+) -> dict:
+    chat_items: list[dict] = []
+    kb_items: list[dict] = []
+
+    if "chat" in export_types:
+        rows = (
+            db.query(ChatMessage)
+            .join(ChatSession, ChatSession.id == ChatMessage.session_id)
+            .filter(ChatSession.user_id == user_id)
+            .order_by(ChatMessage.created_at.desc())
+            .limit(chat_limit)
+            .all()
+        )
+        chat_items = [
+            {
+                "id": row.id,
+                "role": row.role,
+                "created_at": row.created_at.isoformat(),
+                "preview": row.content[:180],
+            }
+            for row in rows
+        ]
+
+    if "kb" in export_types:
+        rows = (
+            db.query(KbDocument, KnowledgeBase)
+            .join(KnowledgeBase, KnowledgeBase.id == KbDocument.kb_id)
+            .filter(KnowledgeBase.user_id == user_id)
+            .order_by(KbDocument.updated_at.desc())
+            .all()
+        )
+        kb_items = [
+            {
+                "id": doc.id,
+                "kb_id": doc.kb_id,
+                "kb_name": kb.name,
+                "status": doc.status,
+                "source_path": doc.source_path,
+                "masked_path": doc.masked_path,
+                "updated_at": doc.updated_at.isoformat(),
+            }
+            for doc, kb in rows
+        ]
+
+    return {"chat_messages": chat_items, "kb_documents": kb_items}
 
 
 def get_export_job(db: Session, user_id: str, job_id: str) -> dict:

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api, ApiError } from "../api/client";
 import type { AgentRole, ChatMessage, ChatSession, KnowledgeBase, McpServer, ModelCatalog, RuntimeProfile } from "../api/types";
+import { DesensitizationModal } from "../components/DesensitizationModal";
 
 type Locale = "zh" | "en";
 type StreamEvent = { type: string; delta?: string; assistant_answer?: string; reasoning_content?: string; message?: string; assistant_message_id?: string };
@@ -204,6 +205,11 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
   const [selectedKbId, setSelectedKbId] = useState<string>("");
   const [exportMenuSessionId, setExportMenuSessionId] = useState<string | null>(null);
   const [exportIncludeReasoning, setExportIncludeReasoning] = useState<boolean>(true);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingIndex, setPendingIndex] = useState(0);
+  const [kbMode, setKbMode] = useState<"context" | "chat_default" | "kb">("context");
+  const [kbTargetId, setKbTargetId] = useState<string>("");
 
   const answerQueueRef = useRef("");
   const reasoningQueueRef = useRef("");
@@ -276,6 +282,12 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
       setProfiles(profileRes.items);
       setCatalog(catalogRes.items);
       setKbList(kbRes.items);
+      if (!selectedKbId) {
+        const chatDefault = kbRes.items.find((item) => item.name === "Chat Default KB");
+        if (chatDefault) {
+          setSelectedKbId(chatDefault.id);
+        }
+      }
       if (!activeSessionId && sessionRes.items.length > 0) {
         setActiveSessionId(sessionRes.items[0].id);
       }
@@ -499,20 +511,19 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
     }
   };
 
-  const handleUpload = async (file: File | null) => {
-    if (!file || !activeSessionId) return;
-    if (file.type.startsWith("image/") && !supportsImage) {
+  const openUploadModal = (files: File[]) => {
+    if (!activeSessionId || files.length === 0) return;
+    const first = files[0];
+    if (first.type.startsWith("image/") && !supportsImage) {
       setMessage(text.imageBlocked);
       return;
     }
-    try {
-      const res = await api.uploadAttachment(activeSessionId, file, token);
-      setAttachmentIds((prev) => [...prev, res.id]);
-      setAttachmentNames((prev) => [...prev, file.name]);
-      setMessage(`${text.uploadDone}: ${file.name}`);
-    } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : text.uploadFailed);
+    if (!kbTargetId && selectedKbId) {
+      setKbTargetId(selectedKbId);
     }
+    setPendingFiles(files);
+    setPendingIndex(0);
+    setUploadModalOpen(true);
   };
 
   const onPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -520,9 +531,9 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
     const fileItems = items.filter((it) => it.kind === "file");
     if (fileItems.length === 0) return;
     e.preventDefault();
-    for (const item of fileItems) {
-      const file = item.getAsFile();
-      await handleUpload(file);
+    const files = fileItems.map((item) => item.getAsFile()).filter((file): file is File => Boolean(file));
+    if (files.length > 0) {
+      openUploadModal(files);
     }
   };
 
@@ -762,7 +773,7 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
             </select>
           </label>
           <textarea value={query} onPaste={(e) => void onPaste(e)} onChange={(e) => setQuery(e.target.value)} placeholder={text.queryPlaceholder} />
-          <input ref={fileInputRef} type="file" style={{ display: "none" }} onChange={(e) => void handleUpload(e.target.files?.[0] ?? null)} />
+          <input ref={fileInputRef} type="file" multiple style={{ display: "none" }} onChange={(e) => openUploadModal(Array.from(e.target.files ?? []))} />
           <button type="button" onClick={sendQa} disabled={!activeSessionId || isStreaming}>{text.send}</button>
           <div className="inline-message">{message}</div>
         </div>
@@ -805,6 +816,93 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
           </div>
         </div>
       )}
+      <DesensitizationModal
+        open={uploadModalOpen}
+        token={token}
+        locale={locale}
+        title={locale === "zh" ? "上传脱敏预览" : "Upload Preview & Mask"}
+        file={pendingFiles[pendingIndex] ?? null}
+        docIndex={pendingIndex}
+        docTotal={pendingFiles.length}
+        onPrevDoc={pendingIndex > 0 ? () => setPendingIndex((prev) => Math.max(0, prev - 1)) : undefined}
+        onNextDoc={pendingIndex < pendingFiles.length - 1 ? () => setPendingIndex((prev) => Math.min(pendingFiles.length - 1, prev + 1)) : undefined}
+        confirmLabel={locale === "zh" ? "确认上传" : "Upload"}
+        onCancel={() => {
+          setUploadModalOpen(false);
+          setPendingFiles([]);
+          setPendingIndex(0);
+        }}
+        onConfirm={async () => {
+          const pendingFile = pendingFiles[pendingIndex];
+          if (!pendingFile || !activeSessionId) return;
+          if (kbMode === "kb" && !kbTargetId) {
+            setMessage(locale === "zh" ? "请选择知识库" : "Select a knowledge base");
+            return;
+          }
+          try {
+            const res = await api.uploadAttachment(activeSessionId, pendingFile, token, {
+              kb_mode: kbMode,
+              kb_id: kbMode === "kb" ? kbTargetId : undefined,
+            });
+            setAttachmentIds((prev) => [...prev, res.id]);
+            setAttachmentNames((prev) => [...prev, pendingFile.name]);
+            setMessage(`${text.uploadDone}: ${pendingFile.name}`);
+            if (res.kb_id) {
+              const kbRes = await api.listKb(token);
+              setKbList(kbRes.items);
+              setSelectedKbId(res.kb_id);
+            }
+          } catch (error) {
+            setMessage(error instanceof ApiError ? error.message : text.uploadFailed);
+          } finally {
+            const nextFiles = pendingFiles.filter((_, idx) => idx !== pendingIndex);
+            if (nextFiles.length === 0) {
+              setUploadModalOpen(false);
+              setPendingFiles([]);
+              setPendingIndex(0);
+              return;
+            }
+            const nextIndex = Math.min(pendingIndex, nextFiles.length - 1);
+            setPendingFiles(nextFiles);
+            setPendingIndex(nextIndex);
+          }
+        }}
+        extraControls={(
+          <div className="panel" style={{ border: "1px dashed rgba(255,255,255,0.15)", background: "transparent" }}>
+            <strong>{locale === "zh" ? "入库选择" : "Storage Target"}</strong>
+            {pendingFiles.length > 1 && (
+              <small className="muted">
+                {locale === "zh"
+                  ? `剩余待处理 ${pendingFiles.length - pendingIndex - 1} 个文件`
+                  : `${pendingFiles.length - pendingIndex - 1} files remaining`}
+              </small>
+            )}
+            <label className="inline-check">
+              <input type="radio" name="kbMode" checked={kbMode === "context"} onChange={() => setKbMode("context")} />
+              {locale === "zh" ? "仅用于本次聊天上下文" : "Context only"}
+            </label>
+            <label className="inline-check">
+              <input type="radio" name="kbMode" checked={kbMode === "chat_default"} onChange={() => setKbMode("chat_default")} />
+              {locale === "zh" ? "进入默认 Chat Default KB" : "Store in Chat Default KB"}
+            </label>
+            <label className="inline-check">
+              <input type="radio" name="kbMode" checked={kbMode === "kb"} onChange={() => setKbMode("kb")} />
+              {locale === "zh" ? "进入指定知识库" : "Store in selected KB"}
+            </label>
+            {kbMode === "kb" && (
+              <select value={kbTargetId} onChange={(e) => setKbTargetId(e.target.value)}>
+                <option value="">{locale === "zh" ? "请选择知识库" : "Select KB"}</option>
+                {kbList.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+            )}
+            <small className="muted">
+              {locale === "zh"
+                ? "建议将体检/历史报告等长期资料放入独立知识库。"
+                : "Tip: Put long-term health records into a dedicated KB."}
+            </small>
+          </div>
+        )}
+      />
     </section>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { api, ApiError } from "../api/client";
 import type { KbDocument, KnowledgeBase, ModelCatalog } from "../api/types";
+import { DesensitizationModal } from "../components/DesensitizationModal";
 
 type Locale = "zh" | "en";
 type Strategy = "keyword" | "semantic" | "hybrid";
@@ -29,7 +30,9 @@ const TEXT = {
     docTitle: "文本标题",
     docContent: "文本内容",
     buildFromText: "用文本构建",
-    uploadDoc: "上传文档构建",
+    uploadDoc: "上传文档",
+    privacyTitle: "隐私与责任提醒",
+    privacyNote: "上传前请认真检查姓名、电话、身份证号等敏感信息，确保你已获得本人授权并愿意用于 AI 问答。",
     queryTitle: "检索测试",
     query: "查询",
     search: "检索",
@@ -74,7 +77,9 @@ const TEXT = {
     docTitle: "Text Title",
     docContent: "Text Content",
     buildFromText: "Build from Text",
-    uploadDoc: "Upload Document",
+    uploadDoc: "Upload files",
+    privacyTitle: "Privacy Notice",
+    privacyNote: "Review sensitive data (name, phone, ID, etc.) before uploading. Only upload with proper consent for AI Q&A.",
     queryTitle: "Retrieval Test",
     query: "Query",
     search: "Search",
@@ -115,6 +120,9 @@ export function KnowledgeBaseCenter({ token, role, locale }: { token: string; ro
   const [catalog, setCatalog] = useState<ModelCatalog[]>([]);
   const [activeKbId, setActiveKbId] = useState("");
   const [message, setMessage] = useState<string>(text.loading);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingIndex, setPendingIndex] = useState(0);
 
   const [form, setForm] = useState({
     name: "family-kb",
@@ -282,17 +290,14 @@ export function KnowledgeBaseCenter({ token, role, locale }: { token: string; ro
     }
   };
 
-  const uploadDoc = async (file: File | null) => {
-    if (!canWrite || !activeKbId || !file) {
+  const uploadDoc = async (files: FileList | null) => {
+    if (!canWrite || !activeKbId || !files || files.length === 0) {
       return;
     }
-    try {
-      await api.uploadKbDocument(activeKbId, file, token);
-      await loadDocs(activeKbId);
-      setMessage(text.uploaded);
-    } catch (error) {
-      setMessage(error instanceof ApiError ? error.message : text.failedUpload);
-    }
+    const list = Array.from(files);
+    setPendingFiles(list);
+    setPendingIndex(0);
+    setUploadModalOpen(true);
   };
 
   const removeDoc = async (docId: string) => {
@@ -405,7 +410,23 @@ export function KnowledgeBaseCenter({ token, role, locale }: { token: string; ro
         <label>{text.docTitle}<input value={docTitle} onChange={(e) => setDocTitle(e.target.value)} /></label>
         <label>{text.docContent}<textarea value={docContent} onChange={(e) => setDocContent(e.target.value)} rows={6} /></label>
         <button type="button" onClick={buildFromText} disabled={!activeKbId || !canWrite}>{text.buildFromText}</button>
-        <label>{text.uploadDoc}<input type="file" onChange={(e) => void uploadDoc(e.target.files?.[0] ?? null)} /></label>
+        <label className="drop-zone" onDragOver={(e) => e.preventDefault()} onDrop={(e) => {
+          e.preventDefault();
+          void uploadDoc(e.dataTransfer.files);
+        }}>
+          <input
+            type="file"
+            multiple
+            onChange={(e) => void uploadDoc(e.target.files)}
+          />
+          <div className="drop-zone-inner">
+            <span className="drop-icon">⬆</span>
+            <div>
+              <strong>{text.uploadDoc}</strong>
+              <small>{locale === "zh" ? "点击选择文件，或拖拽文件到此处上传" : "Click to select files or drag them here"}</small>
+            </div>
+          </div>
+        </label>
 
         <h4>{text.queryTitle}</h4>
         <label>{text.query}<input value={query} onChange={(e) => setQuery(e.target.value)} /></label>
@@ -441,6 +462,51 @@ export function KnowledgeBaseCenter({ token, role, locale }: { token: string; ro
         </div>
         <p className="inline-message">{message}</p>
       </div>
+      <DesensitizationModal
+        open={uploadModalOpen}
+        token={token}
+        locale={locale}
+        title={locale === "zh" ? "知识库上传预览" : "KB Upload Preview"}
+        file={pendingFiles[pendingIndex] ?? null}
+        docIndex={pendingIndex}
+        docTotal={pendingFiles.length}
+        onPrevDoc={pendingIndex > 0 ? () => setPendingIndex((prev) => Math.max(0, prev - 1)) : undefined}
+        onNextDoc={pendingIndex < pendingFiles.length - 1 ? () => setPendingIndex((prev) => Math.min(pendingFiles.length - 1, prev + 1)) : undefined}
+        confirmLabel={locale === "zh" ? "确认上传" : "Upload"}
+        onCancel={() => {
+          setUploadModalOpen(false);
+          setPendingFiles([]);
+          setPendingIndex(0);
+        }}
+        onConfirm={async () => {
+          const pendingFile = pendingFiles[pendingIndex];
+          if (!pendingFile || !activeKbId) return;
+          try {
+            await api.uploadKbDocument(activeKbId, pendingFile, token);
+            await loadDocs(activeKbId);
+            setMessage(text.uploaded);
+          } catch (error) {
+            setMessage(error instanceof ApiError ? error.message : text.failedUpload);
+          } finally {
+            const nextFiles = pendingFiles.filter((_, idx) => idx !== pendingIndex);
+            if (nextFiles.length === 0) {
+              setUploadModalOpen(false);
+              setPendingFiles([]);
+              setPendingIndex(0);
+              return;
+            }
+            const nextIndex = Math.min(pendingIndex, nextFiles.length - 1);
+            setPendingFiles(nextFiles);
+            setPendingIndex(nextIndex);
+          }
+        }}
+        extraControls={(
+          <div className="privacy-warning">
+            <strong>{text.privacyTitle}</strong>
+            <p>{text.privacyNote}</p>
+          </div>
+        )}
+      />
     </section>
   );
 }

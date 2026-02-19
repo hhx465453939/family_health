@@ -26,7 +26,15 @@ _HIGH_RISK_PATTERNS = [
 ]
 
 
-def _record_mapping(db: Session, user_id: str, original: str, replacement_token: str) -> None:
+def _record_mapping(
+    db: Session,
+    user_id: str,
+    original: str,
+    replacement_token: str,
+    source_type: str | None,
+    source_id: str | None,
+    source_path: str | None,
+) -> None:
     db.add(
         PiiMappingVault(
             id=str(uuid4()),
@@ -35,6 +43,9 @@ def _record_mapping(db: Session, user_id: str, original: str, replacement_token:
             original_value_encrypted=encrypt_text(original),
             replacement_token=replacement_token,
             hash_fingerprint=hashlib.sha256(original.encode("utf-8")).hexdigest(),
+            source_type=source_type,
+            source_id=source_id,
+            source_path=source_path,
         )
     )
 
@@ -46,6 +57,7 @@ def create_rule(
     rule_type: str,
     pattern: str,
     replacement_token: str,
+    tag: str | None,
     enabled: bool,
 ) -> DesensitizationRule:
     normalized_type = rule_type.lower()
@@ -63,6 +75,7 @@ def create_rule(
         rule_type=normalized_type,
         pattern=pattern,
         replacement_token=replacement_token,
+        tag=tag,
         enabled=enabled,
     )
     db.add(row)
@@ -90,7 +103,14 @@ def _replace_with_mapping(
     return pattern.sub(repl, text)
 
 
-def sanitize_text(db: Session, user_scope: str, text: str) -> tuple[str, int]:
+def sanitize_text(
+    db: Session,
+    user_scope: str,
+    text: str,
+    source_type: str | None = None,
+    source_id: str | None = None,
+    source_path: str | None = None,
+) -> tuple[str, int]:
     rules = list_rules(db, user_id=user_scope)
     sanitized = text
     replacements = 0
@@ -108,7 +128,15 @@ def sanitize_text(db: Session, user_scope: str, text: str) -> tuple[str, int]:
         def on_match(matched: str) -> None:
             nonlocal replacements
             replacements += 1
-            _record_mapping(db, user_scope, matched, rule.replacement_token)
+            _record_mapping(
+                db,
+                user_scope,
+                matched,
+                rule.replacement_token,
+                source_type,
+                source_id,
+                source_path,
+            )
 
         sanitized = _replace_with_mapping(regex, sanitized, rule.replacement_token, on_match)
 

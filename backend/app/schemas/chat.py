@@ -40,4 +40,14 @@ class DesensitizationRuleCreateRequest(BaseModel):
     rule_type: str = Field(default="literal")
     pattern: str = Field(min_length=1, max_length=500)
     replacement_token: str = Field(min_length=1, max_length=100)
+    tag: str | None = Field(default=None, max_length=40)
     enabled: bool = True
+
+
+class DesensitizationRuleUpdateRequest(BaseModel):
+    member_scope: str | None = Field(default=None, min_length=1, max_length=36)
+    rule_type: str | None = Field(default=None)
+    pattern: str | None = Field(default=None, min_length=1, max_length=500)
+    replacement_token: str | None = Field(default=None, min_length=1, max_length=100)
+    tag: str | None = Field(default=None, max_length=40)
+    enabled: bool | None = None

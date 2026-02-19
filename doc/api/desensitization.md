@@ -3,6 +3,10 @@
 ## 规则管理
 - `POST /api/v1/desensitization/rules`
 - `GET /api/v1/desensitization/rules`
+- `PATCH /api/v1/desensitization/rules/{rule_id}`
+- `DELETE /api/v1/desensitization/rules/{rule_id}`
+- `GET /api/v1/desensitization/presets`
+备注: 规则支持 `tag` 字段用于分组/标签化。
 
 ## 线性脱敏流程（已落地）
 1. 从规则库加载 `global + member_scope` 规则。
