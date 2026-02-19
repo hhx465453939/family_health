@@ -47,9 +47,9 @@ FH_SERVER_PORT=8000
 ```powershell
 cd frontend
 npm install
-npm run dev
+# npm run dev
 # 内网其他设备访问前端开发服务:
-# npm run dev:lan
+npm run dev:lan
 ```
 
 默认访问地址:
