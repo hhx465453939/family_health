@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     mcp_tool_timeout_ms: int = 8000
     mcp_total_budget_ms: int = 15000
     role_library_dir: str = "./app/roles"
+    default_chat_role_id: str | None = "私人医疗架构师"
 
     model_config = SettingsConfigDict(
         env_prefix="FH_",

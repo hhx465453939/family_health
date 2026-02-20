@@ -10,6 +10,7 @@ from uuid import uuid4
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.paths import raw_vault_root, sanitized_workspace_root
 from app.models.chat_attachment import ChatAttachment
 from app.models.chat_message import ChatMessage
@@ -164,12 +165,13 @@ def create_session(
     context_message_limit: int,
     default_enabled_mcp_ids: list[str],
 ) -> ChatSession:
+    resolved_role_id = role_id or (settings.default_chat_role_id or None)
     row = ChatSession(
         id=str(uuid4()),
         user_id=user_id,
         title=title,
         runtime_profile_id=runtime_profile_id,
-        role_id=role_id,
+        role_id=resolved_role_id,
         background_prompt=background_prompt,
         reasoning_enabled=reasoning_enabled,
         reasoning_budget=reasoning_budget,

@@ -12,7 +12,7 @@
 - `POST /api/v1/chat/sessions/bulk-delete`
 
 新增会话参数：
-- `role_id`
+- `role_id`（可选；为空时使用 `FH_DEFAULT_CHAT_ROLE_ID`，默认 `私人医疗架构师`）
 - `runtime_profile_id`（可选，`null` 表示使用默认 Runtime Profile）
 - `chat_kb_id`（系统自动生成的会话 ChatDB）
 - `background_prompt`
