@@ -15,6 +15,7 @@ export type AuthLoginData = {
 
 export type UserSession = {
   token: string;
+  refreshToken?: string;
   role: "owner" | "admin" | "member" | "viewer";
   userId: string;
   expires_at?: number;

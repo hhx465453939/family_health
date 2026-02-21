@@ -110,7 +110,15 @@ export function AuthPage({
     setMessage("");
     try {
       const data = await api.login({ username, password });
-      onLogin({ token: data.access_token, role: data.role, userId: data.user_id }, rememberMe);
+      onLogin(
+        {
+          token: data.access_token,
+          refreshToken: data.refresh_token,
+          role: data.role,
+          userId: data.user_id,
+        },
+        rememberMe,
+      );
     } catch (error) {
       if (error instanceof ApiError) {
         setMessage(`${error.message} (code=${error.code})`);

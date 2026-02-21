@@ -785,6 +785,14 @@ export function ChatCenter({ token, locale }: { token: string; locale: Locale })
   return (
     <section className="chat-grid chat-grid-two" style={{ gridTemplateColumns: `${leftPaneCollapsed ? 56 : leftPaneWidth}px 1fr` }}>
       <div className={leftPaneCollapsed ? "panel resizable-panel collapsed" : "panel resizable-panel"}>
+        <button
+          type="button"
+          onClick={openCreateSessionDialog}
+          title={locale === "zh" ? "新建会话" : "New chat"}
+          aria-label={locale === "zh" ? "新建会话" : "New chat"}
+        >
+          {locale === "zh" ? "新建会话" : "New chat"}
+        </button>
         <div className="row-between session-header">
           <div className="session-title">
             <h3>{text.sessions}</h3>

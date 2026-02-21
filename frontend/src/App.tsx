@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { AUTH_EXPIRED_EVENT, api, setApiLocale } from "./api/client";
+import { AUTH_EXPIRED_EVENT, api, refreshAuth, setApiLocale, setSessionAccessor } from "./api/client";
 import type { UserSession } from "./api/types";
 import { AuthPage } from "./pages/AuthPage";
 import { ChatCenter } from "./pages/ChatCenter";
@@ -15,8 +15,8 @@ type Theme = "light" | "dark";
 const SESSION_KEY = "fh_session";
 const LOCALE_KEY = "fh_locale";
 const THEME_KEY = "fh_theme";
-const OPEN_CHAT_CREATE_EVENT = "fh:open-chat-create";
 const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const REFRESH_INTERVAL_MS = 2 * 60 * 60 * 1000;
 
 function readSession(storage: Storage): UserSession | null {
   const raw = storage.getItem(SESSION_KEY);
@@ -109,6 +109,7 @@ const TEXT = {
 
 export function App() {
   const [session, setSession] = useState<UserSession | null>(() => loadSession());
+  const sessionRef = useRef<UserSession | null>(session);
   const [authMessage, setAuthMessage] = useState("");
   const [activeNav, setActiveNav] = useState<NavKey>("chat");
   const [health, setHealth] = useState<"online" | "offline">("offline");
@@ -119,9 +120,50 @@ export function App() {
   const text = TEXT[locale];
 
   useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
+  useEffect(() => {
+    setSessionAccessor({
+      get: () => sessionRef.current,
+      set: (next) => {
+        setSession((prev) => {
+          if (!next) {
+            saveSession(null, true);
+            return null;
+          }
+          const merged: UserSession = {
+            ...prev,
+            ...next,
+            expires_at: prev?.expires_at ?? next.expires_at,
+          };
+          const remember = Boolean(merged.expires_at);
+          saveSession(merged, remember);
+          return merged;
+        });
+      },
+    });
+    return () => {
+      setSessionAccessor(null);
+    };
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem(LOCALE_KEY, locale);
     setApiLocale(locale);
   }, [locale]);
+
+  useEffect(() => {
+    if (!session?.refreshToken) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void refreshAuth();
+    }, REFRESH_INTERVAL_MS);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [session?.refreshToken]);
 
   useEffect(() => {
     localStorage.setItem(THEME_KEY, theme);
@@ -234,17 +276,6 @@ export function App() {
             </button>
           ))}
         </nav>
-        <div className="side-nav-footer">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveNav("chat");
-              window.dispatchEvent(new Event(OPEN_CHAT_CREATE_EVENT));
-            }}
-          >
-            {locale === "zh" ? "新建会话" : "New Chat"}
-          </button>
-        </div>
       </aside>
 
       <main className="workspace">

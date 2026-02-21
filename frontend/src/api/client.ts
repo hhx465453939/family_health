@@ -11,6 +11,7 @@
   ProviderPreset,
   Provider,
   RuntimeProfile,
+  UserSession,
 } from "./types";
 
 const API_PREFIX = "/api/v1";
@@ -19,9 +20,30 @@ type UiLocale = "zh" | "en";
 let uiLocale: UiLocale = "zh";
 
 let authExpiredNotified = false;
+let refreshInFlight: Promise<UserSession | null> | null = null;
+
+type SessionAccessor = {
+  get: () => UserSession | null;
+  set: (next: UserSession | null) => void;
+};
+
+let sessionAccessor: SessionAccessor | null = null;
 
 export function setApiLocale(locale: UiLocale): void {
   uiLocale = locale;
+}
+
+export function setSessionAccessor(accessor: SessionAccessor | null): void {
+  sessionAccessor = accessor;
+}
+
+export async function refreshAuth(): Promise<boolean> {
+  const refreshed = await refreshSession();
+  if (!refreshed) {
+    notifyAuthExpired();
+    return false;
+  }
+  return true;
 }
 
 function notifyAuthExpired(): void {
@@ -42,10 +64,56 @@ export class ApiError extends Error {
   }
 }
 
+async function refreshSession(): Promise<UserSession | null> {
+  if (!sessionAccessor) {
+    return null;
+  }
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+  const current = sessionAccessor.get();
+  if (!current?.refreshToken) {
+    return null;
+  }
+  refreshInFlight = (async () => {
+    const response = await fetch(`${API_PREFIX}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: current.refreshToken }),
+    });
+    const isJson = response.headers.get("content-type")?.includes("application/json");
+    if (!isJson) {
+      return null;
+    }
+    const body = (await response.json()) as ApiEnvelope<{
+      access_token: string;
+      refresh_token: string;
+      token_type: string;
+    }>;
+    if (!response.ok || body.code !== 0) {
+      return null;
+    }
+    const updated: UserSession = {
+      ...current,
+      token: body.data.access_token,
+      refreshToken: body.data.refresh_token ?? current.refreshToken,
+    };
+    sessionAccessor?.set(updated);
+    authExpiredNotified = false;
+    return updated;
+  })();
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
+  }
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
   token?: string,
+  allowRefresh = true,
 ): Promise<T> {
   const headers = new Headers(options.headers ?? {});
   headers.set("Content-Type", headers.get("Content-Type") ?? "application/json");
@@ -71,10 +139,17 @@ async function request<T>(
   if (!response.ok || maybeEnvelope.code !== 0) {
     let message =
       maybeEnvelope.message ?? maybeEnvelope.detail ?? `HTTP ${response.status}`;
-    if (
+    const shouldRefresh =
+      allowRefresh &&
       response.status === 401 &&
-      /missing bearer token|invalid token|invalid token type|user not found|not authenticated|invalid authentication credentials|unauthorized/i.test(message)
-    ) {
+      /missing bearer token|invalid token|invalid token type|user not found|not authenticated|invalid authentication credentials|unauthorized/i.test(message);
+    if (shouldRefresh) {
+      const refreshed = await refreshSession();
+      if (refreshed?.token) {
+        return request<T>(path, options, refreshed.token, false);
+      }
+    }
+    if (response.status === 401) {
       message =
         uiLocale === "zh"
           ? "登录状态已失效，请重新登录后重试"
@@ -261,17 +336,24 @@ export const api = {
     if (options?.kb_id) {
       form.append("kb_id", options.kb_id);
     }
-    const response = await fetch(`${API_PREFIX}/chat/sessions/${sessionId}/attachments`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: form,
-    });
+    const runUpload = async (currentToken: string, allowRefresh = true) => {
+      const response = await fetch(`${API_PREFIX}/chat/sessions/${sessionId}/attachments`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${currentToken}` },
+        body: form,
+      });
+      if (response.status === 401 && allowRefresh) {
+        const refreshed = await refreshSession();
+        if (refreshed?.token) {
+          return runUpload(refreshed.token, false);
+        }
+      }
+      return response;
+    };
+    const response = await runUpload(token);
     const body = (await response.json()) as ApiEnvelope<{ id: string; kb_id?: string | null }>;
     if (!response.ok || body.code !== 0) {
-      if (
-        response.status === 401 &&
-        /missing bearer token|invalid token|invalid token type|user not found/i.test(body.message)
-      ) {
+      if (response.status === 401) {
         notifyAuthExpired();
       }
       throw new ApiError(body.message, body.code ?? response.status, body.trace_id ?? "unknown");
@@ -348,11 +430,21 @@ export const api = {
     token: string,
     onEvent: (event: { type: string; delta?: string; assistant_answer?: string; reasoning_content?: string; message?: string }) => void,
   ): Promise<void> => {
-    const response = await fetch(`${API_PREFIX}/agent/qa/stream`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const runStream = async (currentToken: string, allowRefresh = true): Promise<Response> => {
+      const response = await fetch(`${API_PREFIX}/agent/qa/stream`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${currentToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (response.status === 401 && allowRefresh) {
+        const refreshed = await refreshSession();
+        if (refreshed?.token) {
+          return runStream(refreshed.token, false);
+        }
+      }
+      return response;
+    };
+    const response = await runStream(token);
     if (response.status === 401) {
       notifyAuthExpired();
       throw new ApiError(

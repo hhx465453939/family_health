@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     server_port: int = 8000
     db_url: str = "sqlite:///./family_health.db"
     secret_key: str = "change-this-in-production-please-use-32-plus-bytes"
-    access_token_expire_minutes: int = 15
+    access_token_expire_minutes: int = 120
     refresh_token_expire_days: int = 7
     login_lock_max_attempts: int = 5
     login_lock_minutes: int = 15

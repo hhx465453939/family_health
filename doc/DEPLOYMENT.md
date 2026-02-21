@@ -38,6 +38,7 @@ uv sync
     ```
     FH_SERVER_HOST=127.0.0.1
     FH_SERVER_PORT=8000
+    FH_ACCESS_TOKEN_EXPIRE_MINUTES=120
     ```
 - **启动服务**:
   ```bash
