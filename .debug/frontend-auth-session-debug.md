@@ -84,6 +84,24 @@
 - 影响评估
   - 仅改进登录持久化逻辑，不影响后端鉴权策略。
 
+### [2026-02-21 12:10] 自动续期与 2 小时会话
+- 问题描述
+  - 用户使用过程中 401 被强制登出，希望会话至少 1-2 小时并自动续期。
+- 根因定位
+  - access token 默认 15 分钟且前端不做 refresh 自动续期。
+- 解决方案
+  - 前端统一请求在 401 时尝试 `/auth/refresh` 并重试。
+  - 登录后保存 refresh token；应用定时（2 小时）触发 refresh。
+- 代码变更（文件/函数）
+  - `frontend/src/api/client.ts`
+  - `frontend/src/App.tsx`
+  - `frontend/src/pages/AuthPage.tsx`
+  - `frontend/src/api/types.ts`
+- 验证结果
+  - 待执行前端构建检查。
+- 影响评估
+  - 401 更少触发强制登出，长会话更稳定。
+
 ## 待追踪问题
 - 已实现 refresh token 自动续期；如需静默续期失败的监控与提示可再补充。
 
