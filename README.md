@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
   <img src="docs/assets/fhp-logo.svg" alt="Family Health Platform Logo" width="120" height="120" />
   <h1>Family Health Platform</h1>
   <p>高端家庭健康管理中台 · Family-grade Private Health Operations Console</p>
@@ -47,6 +47,20 @@ python3 quickstart.py --lan
 ```
 - 默认读取仓库根目录 `.env` 的 `FH_SERVER_HOST/FH_SERVER_PORT`
 - 自动检查 `uv` 与 `npm`，安装依赖并同时启动前后端
+
+### Windows GUI 启动器（推荐）
+双击项目根目录的 `FamilyHealth.exe`（或 `python launcher.py`），会打开可视化控制台：
+- 自动检测并安装 `uv` 和 `Node.js`（无需预装）
+- 一键启动后端 + 前端，实时滚动日志
+- 前端就绪后自动打开浏览器 `http://localhost:5173`
+- 勾选「LAN 模式」可让内网设备访问
+
+打包 `.exe`：
+```powershell
+pip install pyinstaller
+build_launcher.bat
+# 产出 dist/FamilyHealth.exe，复制到项目根目录即可
+```
 
 ### 1) 后端
 ```powershell
