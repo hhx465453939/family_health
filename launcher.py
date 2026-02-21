@@ -90,10 +90,18 @@ def _env_with_tools() -> dict[str, str]:
     return env
 
 
+_WIN = sys.platform == "win32"
+_WIN_EXTS = (".cmd", ".bat", ".exe") if _WIN else ()
+_SP_FLAGS: dict[str, int] = (
+    {"creationflags": subprocess.CREATE_NO_WINDOW} if _WIN else {}
+)
+
+
 def _which(name: str, env: dict[str, str] | None = None) -> str | None:
+    exts = (*_WIN_EXTS, "") if _WIN else ("", ".exe", ".cmd", ".bat")
     if env:
         for p in env.get("PATH", "").split(os.pathsep):
-            for ext in ("", ".exe", ".cmd", ".bat"):
+            for ext in exts:
                 fp = Path(p) / (name + ext)
                 if fp.is_file():
                     return str(fp)
@@ -109,11 +117,11 @@ def _ensure_uv(env: dict[str, str]) -> dict[str, str]:
         subprocess.check_call(
             ["powershell", "-ExecutionPolicy", "Bypass", "-Command",
              f"irm {UV_INSTALL_URL} | iex"],
-            env=env,
+            env=env, **_SP_FLAGS,
         )
     except Exception as exc:
         log(f"[WARN] PowerShell 安装 uv 失败 ({exc})，尝试 pip 安装…")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "uv"], env=env)
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "uv"], env=env, **_SP_FLAGS)
     env = _env_with_tools()
     if _which("uv", env):
         log("[OK] uv 安装成功")
@@ -172,30 +180,41 @@ def launch(lan: bool = False) -> None:
     env = _ensure_uv(env)
     env = _ensure_node(env)
 
-    log("[STEP] 初始化后端虚拟环境…")
-    subprocess.check_call([_which("uv", env), "venv"], cwd=str(BACKEND), env=env)
-    log("[STEP] 安装后端依赖…")
-    subprocess.check_call([_which("uv", env), "sync"], cwd=str(BACKEND), env=env)
+    uv = _which("uv", env)
+    npm = _which("npm", env)
+
+    log(f"[INFO] uv  → {uv}")
+    log(f"[INFO] npm → {npm}")
+
+    if (BACKEND / ".venv").exists():
+        log("[OK] 后端虚拟环境已存在，跳过创建")
+    else:
+        log("[STEP] 初始化后端虚拟环境…")
+        subprocess.check_call([uv, "venv"], cwd=str(BACKEND), env=env, **_SP_FLAGS)
+    log("[STEP] 安装/同步后端依赖…")
+    subprocess.check_call([uv, "sync"], cwd=str(BACKEND), env=env, **_SP_FLAGS)
 
     if not (FRONTEND / "node_modules").exists():
         log("[STEP] 安装前端依赖…")
-        subprocess.check_call([_which("npm", env), "install"], cwd=str(FRONTEND), env=env)
+        subprocess.check_call([npm, "install"], cwd=str(FRONTEND), env=env, **_SP_FLAGS)
 
     log("[STEP] 启动后端…")
     be = subprocess.Popen(
-        [_which("uv", env), "run", "python", "-m", "app"],
+        [uv, "run", "python", "-m", "app"],
         cwd=str(BACKEND), env=env,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        **_SP_FLAGS,
     )
     _procs.append(be)
     threading.Thread(target=_stream_output, args=(be, "Backend"), daemon=True).start()
 
-    fe_cmd = [_which("npm", env), "run", "dev:lan"] if lan else [_which("npm", env), "run", "dev"]
+    fe_cmd = [npm, "run", "dev:lan"] if lan else [npm, "run", "dev"]
     log(f"[STEP] 启动前端 ({'LAN' if lan else 'localhost'})…")
     fe = subprocess.Popen(
         fe_cmd,
         cwd=str(FRONTEND), env=env,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        **_SP_FLAGS,
     )
     _procs.append(fe)
     threading.Thread(target=_stream_output, args=(fe, "Frontend"), daemon=True).start()
