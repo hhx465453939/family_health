@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 
 
 class BootstrapOwnerRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=64)
+    username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=8, max_length=128)
     display_name: str = Field(min_length=1, max_length=64)
 
@@ -14,7 +14,7 @@ class LoginRequest(BaseModel):
 
 
 class RegisterRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=64)
+    username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=8, max_length=128)
     display_name: str = Field(min_length=1, max_length=64)
 
@@ -24,7 +24,7 @@ class RefreshRequest(BaseModel):
 
 
 class CreateUserRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=64)
+    username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=8, max_length=128)
     display_name: str = Field(min_length=1, max_length=64)
     role: str = Field(default="member")

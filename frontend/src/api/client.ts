@@ -136,10 +136,25 @@ async function request<T>(
   }
 
   const body = (await response.json()) as ApiEnvelope<T>;
-  const maybeEnvelope = body as Partial<ApiEnvelope<T>> & { detail?: string };
+  const maybeEnvelope = body as Partial<ApiEnvelope<T>> & {
+    detail?: string | Array<{ loc: string[]; msg: string; type: string }>;
+  };
   if (!response.ok || maybeEnvelope.code !== 0) {
+    // Handle FastAPI 422 validation errors where detail is an array
+    let detailStr: string | undefined;
+    if (Array.isArray(maybeEnvelope.detail)) {
+      detailStr = maybeEnvelope.detail
+        .map((e) => {
+          const field = e.loc.length > 1 ? e.loc[e.loc.length - 1] : e.loc.join(".");
+          return `${field}: ${e.msg}`;
+        })
+        .join("; ");
+    } else if (maybeEnvelope.detail) {
+      detailStr = maybeEnvelope.detail;
+    }
+
     let message =
-      maybeEnvelope.message ?? maybeEnvelope.detail ?? `HTTP ${response.status}`;
+      maybeEnvelope.message ?? detailStr ?? `HTTP ${response.status}`;
     const shouldRefresh =
       allowRefresh &&
       response.status === 401 &&
@@ -150,7 +165,8 @@ async function request<T>(
         return request<T>(path, options, refreshed.token, false);
       }
     }
-    if (response.status === 401) {
+    // Only replace 401 message for token-expiry scenarios (not auth endpoints like login/register)
+    if (response.status === 401 && !maybeEnvelope.code) {
       message =
         uiLocale === "zh"
           ? "登录状态已失效，请重新登录后重试"
